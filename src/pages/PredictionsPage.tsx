@@ -1,37 +1,103 @@
 import { useState, useEffect, useRef } from 'react'
-import { flushSync } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import api from '../services/api'
 import { Game, Prediction, Pool } from '../types'
-import FlagImage, { FLAG_CODES } from '../components/FlagImage'
+import { FLAG_CODES, TEAM_ABBR } from '../components/FlagImage'
 
-const SLIDE_VARIANTS = {
-  enter: (direction: number) => ({ x: direction > 0 ? '100%' : '-100%' }),
-  center: { x: 0 },
-  exit: (direction: number) => ({ x: direction > 0 ? '-100%' : '100%' }),
+const GROUPS = 'ABCDEFGHIJKL'.split('')
+
+interface TeamStats {
+  team: string
+  played: number
+  won: number
+  drawn: number
+  lost: number
+  goalsFor: number
+  goalsAgainst: number
+  points: number
 }
 
-const SPRING = { type: 'spring', stiffness: 600, damping: 50 }
+function emptyStats(team: string): TeamStats {
+  return { team, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, points: 0 }
+}
+
+function applyGameResult(
+  home: TeamStats,
+  away: TeamStats,
+  homeGoals: number,
+  awayGoals: number
+) {
+  home.played++
+  away.played++
+  home.goalsFor += homeGoals
+  home.goalsAgainst += awayGoals
+  away.goalsFor += awayGoals
+  away.goalsAgainst += homeGoals
+
+  if (homeGoals > awayGoals) {
+    home.won++
+    home.points += 3
+    away.lost++
+    return
+  }
+  if (homeGoals < awayGoals) {
+    away.won++
+    away.points += 3
+    home.lost++
+    return
+  }
+  home.drawn++
+  away.drawn++
+  home.points++
+  away.points++
+}
+
+function computeGroupStandings(
+  groupGames: Game[],
+  scores: Record<string, [string, string]>
+): TeamStats[] {
+  const teams = [...new Set(groupGames.flatMap(g => [g.team1, g.team2]))]
+  const statsMap: Record<string, TeamStats> = Object.fromEntries(
+    teams.map(team => [team, emptyStats(team)])
+  )
+
+  for (const game of groupGames) {
+    const [rawScore1, rawScore2] = scores[game.id] ?? ['', '']
+    if (rawScore1 === '' || rawScore2 === '') continue
+    applyGameResult(
+      statsMap[game.team1],
+      statsMap[game.team2],
+      Number(rawScore1),
+      Number(rawScore2)
+    )
+  }
+
+  return teams
+    .map(team => statsMap[team])
+    .sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points
+      const gdA = a.goalsFor - a.goalsAgainst
+      const gdB = b.goalsFor - b.goalsAgainst
+      if (gdB !== gdA) return gdB - gdA
+      return b.goalsFor - a.goalsFor
+    })
+}
 
 export default function PredictionsPage() {
   const { poolCode } = useParams<{ poolCode: string }>()
   const navigate = useNavigate()
 
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [direction, setDirection] = useState(1)
+  const [activeGroup, setActiveGroup] = useState('A')
   const [scores, setScores] = useState<Record<string, [string, string]>>({})
-  const [savingGameId, setSavingGameId] = useState<string | null>(null)
-  const score1Refs = useRef<Record<string, HTMLInputElement | null>>({})
-  const score2Refs = useRef<Record<string, HTMLInputElement | null>>({})
-  const nextButtonRef = useRef<HTMLButtonElement>(null)
-  const keyboardAnchorRef = useRef<HTMLInputElement>(null)
-  const initialFocusDone = useRef(false)
-  const [showNavigation, setShowNavigation] = useState(false)
+  const [savingGames, setSavingGames] = useState<Record<string, boolean>>({})
   const [showConfirm, setShowConfirm] = useState(false)
   const [lockError, setLockError] = useState('')
   const [locking, setLocking] = useState(false)
+
+  const score1Refs = useRef<Record<string, HTMLInputElement | null>>({})
+  const score2Refs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const { data: pool } = useQuery({
     queryKey: ['pool', poolCode],
@@ -60,114 +126,42 @@ export default function PredictionsPage() {
   })
 
   useEffect(() => {
-    if (!savedPredictions || !games) return
+    if (!savedPredictions) return
     const loaded: Record<string, [string, string]> = {}
-    for (const p of savedPredictions) {
-      loaded[p.gameId] = [String(p.score1), String(p.score2)]
+    for (const prediction of savedPredictions) {
+      loaded[prediction.gameId] = [String(prediction.score1), String(prediction.score2)]
     }
     setScores(loaded)
-    const filled = savedPredictions.length
-    if (filled > 0 && filled < games.length) setCurrentIndex(filled)
-  }, [savedPredictions, games])
-
-  useEffect(() => {
-    if (!games) return
-    const game = games[currentIndex]
-    if (!game) return
-    const [cs1, cs2] = scores[game.id] ?? ['', '']
-    const locked = savedPredictions?.find(p => p.gameId === game.id)?.isLocked ?? false
-    if (cs1 !== '' && cs2 !== '' && !locked) {
-      nextButtonRef.current?.focus()
-    }
-  }, [scores, currentIndex])
-
-  useEffect(() => {
-    if (!games || initialFocusDone.current) return
-    initialFocusDone.current = true
-    const timer = setTimeout(() => {
-      score1Refs.current[games[currentIndex]?.id ?? '']?.focus({ preventScroll: true })
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [games])
+  }, [savedPredictions])
 
   const saveMutation = useMutation({
     mutationFn: ({ gameId, score1, score2 }: { gameId: string; score1: number; score2: number }) =>
       api.post('/predictions/save', { poolId: pool!.id, gameId, score1, score2 }),
   })
 
-  function saveCurrentInBackground() {
-    if (!currentGame || !pool) return
-    const [cs1, cs2] = scores[currentGame.id] ?? ['', '']
-    if (cs1 === '' || cs2 === '') return
-    setSavingGameId(currentGame.id)
-    saveMutation.mutateAsync({ gameId: currentGame.id, score1: Number(cs1), score2: Number(cs2) })
+  function saveGame(gameId: string, score1: number, score2: number) {
+    if (!pool) return
+    setSavingGames(prev => ({ ...prev, [gameId]: true }))
+    saveMutation.mutateAsync({ gameId, score1, score2 })
       .catch(() => {})
-      .finally(() => setSavingGameId(null))
+      .finally(() => setSavingGames(prev => ({ ...prev, [gameId]: false })))
   }
 
-  function goToGame(delta: number) {
-    if (!games || !currentGame) return
-    const next = currentIndex + delta
-    if (next < 0 || next >= games.length) return
-    saveCurrentInBackground()
-    const nextGame = games[next]
-    const [ns1, ns2] = scores[nextGame.id] ?? ['', '']
-    const nextIsFilled = ns1 !== '' && ns2 !== ''
-    if (!nextIsFilled) {
-      keyboardAnchorRef.current?.focus({ preventScroll: true })
-    }
-    flushSync(() => {
-      setDirection(delta)
-      setCurrentIndex(next)
-    })
-    if (!nextIsFilled) {
-      setTimeout(() => score1Refs.current[nextGame.id]?.focus({ preventScroll: true }), 160)
-    }
-  }
-
-  function jumpToGame(index: number) {
-    if (!games) return
-    saveCurrentInBackground()
-    const targetGame = games[index]
-    const [ts1, ts2] = scores[targetGame.id] ?? ['', '']
-    const targetIsFilled = ts1 !== '' && ts2 !== ''
-    if (!targetIsFilled) {
-      keyboardAnchorRef.current?.focus({ preventScroll: true })
-    }
-    flushSync(() => {
-      setDirection(index > currentIndex ? 1 : -1)
-      setCurrentIndex(index)
-      setShowNavigation(false)
-    })
-    if (!targetIsFilled) {
-      setTimeout(() => score1Refs.current[targetGame.id]?.focus({ preventScroll: true }), 160)
-    }
-  }
-
-  async function saveAndConfirm() {
-    if (!games || !currentGame || !pool) return
-    const [cs1, cs2] = scores[currentGame.id] ?? ['', '']
-    if (cs1 !== '' && cs2 !== '') {
-      setSavingGameId(currentGame.id)
-      try {
-        await saveMutation.mutateAsync({ gameId: currentGame.id, score1: Number(cs1), score2: Number(cs2) })
-      } catch { /* silent */ }
-      finally { setSavingGameId(null) }
-    }
-    setShowConfirm(true)
-  }
-
-  function handleScoreChange(team: 0 | 1, value: string) {
-    if (!currentGame) return
+  function handleScoreChange(gameId: string, team: 0 | 1, value: string) {
     const digits = value.replace(/\D/g, '').slice(0, 2)
-    const prev = scores[currentGame.id] ?? ['', '']
+    const prev = scores[gameId] ?? ['', '']
     const updated: [string, string] = team === 0 ? [digits, prev[1]] : [prev[0], digits]
-    setScores(s => ({ ...s, [currentGame.id]: updated }))
+    setScores(s => ({ ...s, [gameId]: updated }))
 
     if (team === 0 && digits.length >= 1) {
-      const s2 = score2Refs.current[currentGame.id]
-      s2?.focus({ preventScroll: true })
-      s2?.select()
+      score2Refs.current[gameId]?.focus({ preventScroll: true })
+      score2Refs.current[gameId]?.select()
+    }
+
+    const newScore1 = team === 0 ? digits : prev[0]
+    const newScore2 = team === 1 ? digits : prev[1]
+    if (newScore1 !== '' && newScore2 !== '') {
+      saveGame(gameId, Number(newScore1), Number(newScore2))
     }
   }
 
@@ -181,26 +175,24 @@ export default function PredictionsPage() {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
       setLockError(msg || 'Erro ao confirmar palpites')
-    } finally { setLocking(false) }
+    } finally {
+      setLocking(false)
+    }
   }
 
   if (!games || !pool) {
     return <div className="flex items-center justify-center min-h-screen text-slate-400">Carregando...</div>
   }
 
-  const currentGame = games[currentIndex]
-  const filledCount = Object.values(scores).filter(([s1, s2]) => s1 !== '' && s2 !== '').length
-  const isCurrentLocked = savedPredictions?.find(p => p.gameId === currentGame?.id)?.isLocked ?? false
-  const [s1, s2] = scores[currentGame?.id] ?? ['', '']
-  const matchDate = new Date(currentGame.matchDate)
-  const dateStr = matchDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', weekday: 'short' })
-  const isSaving = savingGameId === currentGame.id
-
-  // Group games by group letter
-  const groups = 'ABCDEFGHIJKL'.split('')
   const gamesByGroup: Record<string, Game[]> = {}
-  for (const g of groups) gamesByGroup[g] = []
+  for (const groupLetter of GROUPS) gamesByGroup[groupLetter] = []
   for (const game of games) gamesByGroup[game.group]?.push(game)
+
+  const filledCount = Object.values(scores).filter(
+    ([score1, score2]) => score1 !== '' && score2 !== ''
+  ).length
+
+  const lockedPredictions = new Map(savedPredictions?.map(p => [p.gameId, p]) ?? [])
 
   if (showConfirm) {
     return (
@@ -232,219 +224,200 @@ export default function PredictionsPage() {
     )
   }
 
+  const activeGroupGames = gamesByGroup[activeGroup] ?? []
+  const standings = computeGroupStandings(activeGroupGames, scores)
+
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Keyboard anchor: keeps iOS keyboard open during game transitions */}
-      <input
-        ref={keyboardAnchorRef}
-        inputMode="numeric"
-        value=""
-        onChange={() => {}}
-        aria-hidden="true"
-        tabIndex={-1}
-        style={{ position: 'fixed', bottom: 0, left: '-9999px', width: '1px', height: '1px', opacity: 0 }}
-      />
-
-      {/* Header */}
-      <div className="px-5 pt-6 pb-3 bg-copa-dark border-b border-copa-border">
+      {/* Sticky header */}
+      <div className="px-5 pt-6 pb-3 bg-copa-dark border-b border-copa-border sticky top-0 z-20">
         <div className="flex justify-between items-center mb-3">
-          <button onClick={() => navigate(`/ranking/${poolCode}`)} className="text-slate-400 text-sm">
+          <button
+            onClick={() => navigate(`/ranking/${poolCode}`)}
+            className="text-slate-400 text-sm"
+          >
             ← {pool.name}
           </button>
-          <span className={`text-sm font-medium transition-colors ${isSaving ? 'text-copa-green' : 'text-slate-400'}`}>
-            {isSaving ? '💾 Salvando...' : `${filledCount}/${games.length} palpites`}
+          <span className="text-sm text-slate-400">
+            {filledCount}/{games.length} palpites
           </span>
         </div>
-        <div className="h-1.5 bg-copa-border rounded-full overflow-hidden">
+
+        <div className="h-1.5 bg-copa-border rounded-full overflow-hidden mb-3">
           <motion.div
             className="h-full bg-copa-gold rounded-full"
             animate={{ width: `${(filledCount / games.length) * 100}%` }}
             transition={{ duration: 0.4 }}
           />
         </div>
+
+        <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          {GROUPS.map(groupLetter => {
+            const groupGames = gamesByGroup[groupLetter]
+            if (!groupGames?.length) return null
+            const groupFilledCount = groupGames.filter(game => {
+              const [score1, score2] = scores[game.id] ?? ['', '']
+              return score1 !== '' && score2 !== ''
+            }).length
+            const isGroupComplete = groupFilledCount === groupGames.length
+            return (
+              <button
+                key={groupLetter}
+                onClick={() => setActiveGroup(groupLetter)}
+                className={`shrink-0 h-8 w-8 rounded-lg text-sm font-bold transition-all ${
+                  activeGroup === groupLetter
+                    ? 'bg-copa-gold text-copa-dark'
+                    : isGroupComplete
+                    ? 'bg-copa-green/20 border border-copa-green/40 text-copa-green'
+                    : 'bg-copa-border text-slate-400'
+                }`}
+              >
+                {groupLetter}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      {/* Collapsible group navigation */}
-      <div className="border-b border-copa-border">
-        <button
-          className="w-full px-5 py-3 flex justify-between items-center text-sm text-slate-400 active:bg-copa-card transition-colors"
-          onClick={() => setShowNavigation(v => !v)}
-        >
-          <span className="font-medium">
-            📋 Navegar por grupo
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="text-xs text-copa-gold font-bold">
-              Jogo {currentGame.number} · Grupo {currentGame.group}
-            </span>
-            <span className={`transition-transform duration-200 ${showNavigation ? 'rotate-180' : ''}`}>▾</span>
-          </span>
-        </button>
-
-        <AnimatePresence>
-          {showNavigation && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden"
-            >
-              <div className="px-4 pb-4 pt-2 space-y-3">
-                {groups.map(groupLetter => {
-                  const groupGames = gamesByGroup[groupLetter]
-                  if (!groupGames?.length) return null
-                  const groupTeams = [...new Set(groupGames.flatMap(g => [g.team1, g.team2]))]
-                  return (
-                    <div key={groupLetter}>
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                        Grupo {groupLetter}{' '}
-                        <span className="font-normal normal-case text-slate-600">
-                          ({groupTeams.join(', ')})
-                        </span>
-                      </p>
-                      <div className="flex gap-2 flex-wrap">
-                        {groupGames.map(game => {
-                          const gameIndex = games.findIndex(g => g.id === game.id)
-                          const filled = (scores[game.id]?.[0] ?? '') !== '' && (scores[game.id]?.[1] ?? '') !== ''
-                          const isCurrent = gameIndex === currentIndex
-                          return (
-                            <button
-                              key={game.id}
-                              onClick={() => jumpToGame(gameIndex)}
-                              className={`h-9 px-1.5 rounded-xl flex items-center gap-1 transition-all active:scale-90 ${
-                                isCurrent
-                                  ? 'bg-copa-gold scale-110 shadow-lg shadow-copa-gold/30'
-                                  : filled
-                                  ? 'bg-copa-green/20 border border-copa-green/40'
-                                  : 'bg-copa-border'
-                              }`}
-                            >
-                              <img
-                                src={`/flags/${FLAG_CODES[game.team1] ?? 'xx'}.png`}
-                                alt={game.team1}
-                                className="w-6 h-4 object-cover rounded-sm"
-                              />
-                              <img
-                                src={`/flags/${FLAG_CODES[game.team2] ?? 'xx'}.png`}
-                                alt={game.team2}
-                                className="w-6 h-4 object-cover rounded-sm"
-                              />
-                            </button>
-                          )
-                        })}
+      {/* Scrollable content */}
+      <div className="flex-1 px-5 pb-8 pt-4 space-y-3">
+        {/* Live standings */}
+        <div className="card p-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-copa-gold mb-0.5">
+            Classificação · Grupo {activeGroup}
+          </p>
+          <p className="text-xs text-slate-500 mb-2">Simulação pelos seus palpites</p>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-slate-500 border-b border-copa-border">
+                <th className="text-left pb-1.5 font-medium w-5">#</th>
+                <th className="text-left pb-1.5 font-medium">Seleção</th>
+                <th className="text-center pb-1.5 font-medium w-6">J</th>
+                <th className="text-center pb-1.5 font-medium w-6">V</th>
+                <th className="text-center pb-1.5 font-medium w-6">E</th>
+                <th className="text-center pb-1.5 font-medium w-6">D</th>
+                <th className="text-center pb-1.5 font-medium w-8">SG</th>
+                <th className="text-center pb-1.5 font-bold text-white w-8">Pts</th>
+              </tr>
+            </thead>
+            <tbody>
+              {standings.map((stat, index) => {
+                const goalDifference = stat.goalsFor - stat.goalsAgainst
+                const isQualifying = index < 2
+                return (
+                  <tr key={stat.team} className={isQualifying ? 'text-white' : 'text-slate-500'}>
+                    <td className="py-1.5">
+                      <span className={`text-center inline-block w-4 ${isQualifying ? 'text-copa-gold font-bold' : ''}`}>
+                        {index + 1}
+                      </span>
+                    </td>
+                    <td className="py-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <img
+                          src={`/flags/${FLAG_CODES[stat.team] ?? 'xx'}.png`}
+                          alt={stat.team}
+                          className="w-5 h-3.5 object-cover rounded-sm shrink-0"
+                        />
+                        <span>{TEAM_ABBR[stat.team] ?? stat.team}</span>
                       </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+                    </td>
+                    <td className="text-center py-1.5">{stat.played}</td>
+                    <td className="text-center py-1.5">{stat.won}</td>
+                    <td className="text-center py-1.5">{stat.drawn}</td>
+                    <td className="text-center py-1.5">{stat.lost}</td>
+                    <td className="text-center py-1.5">
+                      {goalDifference > 0 ? `+${goalDifference}` : goalDifference}
+                    </td>
+                    <td className="text-center py-1.5 font-bold">{stat.points}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
 
-      {/* Game card carousel */}
-      <div className="mt-5 mx-5 relative overflow-hidden" style={{ minHeight: '200px' }}>
-        <AnimatePresence mode="sync" custom={direction}>
-          <motion.div
-            key={currentGame.id}
-            className="absolute inset-x-0 top-0"
-            custom={direction}
-            variants={SLIDE_VARIANTS}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={SPRING}
-          >
-            <div className="card p-4">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-xs font-bold uppercase tracking-widest text-copa-gold bg-copa-gold/10 px-3 py-1 rounded-full">
-                  Grupo {currentGame.group}
-                </span>
-                <span className="text-slate-400 text-xs">{dateStr}</span>
-              </div>
-
-              <div className="flex items-center justify-between gap-2 mb-4">
-                {/* Team 1 */}
-                <div className="flex-1 text-center">
-                  <div className="w-12 h-8 mx-auto mb-2 overflow-hidden rounded-sm">
-                    <FlagImage team={currentGame.team1} size={48} className="w-full h-full object-cover" />
-                  </div>
-                  <p className="text-xs font-bold text-white leading-snug">{currentGame.team1}</p>
-                </div>
-
-                {/* Scores */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <input
-                    ref={el => { score1Refs.current[currentGame.id] = el }}
-                    className={`score-input ${isCurrentLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    type="text"
-                    inputMode="numeric"
-                    value={s1}
-                    onChange={e => handleScoreChange(0, e.target.value)}
-                    onFocus={e => e.target.select()}
-                    disabled={isCurrentLocked}
-                    placeholder="–"
-                  />
-                  <span className="text-slate-500 font-bold text-lg">×</span>
-                  <input
-                    ref={el => { score2Refs.current[currentGame.id] = el }}
-                    className={`score-input ${isCurrentLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    type="text"
-                    inputMode="numeric"
-                    value={s2}
-                    onChange={e => handleScoreChange(1, e.target.value)}
-                    onFocus={e => e.target.select()}
-                    disabled={isCurrentLocked}
-                    placeholder="–"
-                  />
-                </div>
-
-                {/* Team 2 */}
-                <div className="flex-1 text-center">
-                  <div className="w-12 h-8 mx-auto mb-2 overflow-hidden rounded-sm">
-                    <FlagImage team={currentGame.team2} size={48} className="w-full h-full object-cover" />
-                  </div>
-                  <p className="text-xs font-bold text-white leading-snug">{currentGame.team2}</p>
-                </div>
-              </div>
-
-              <p className="text-center text-xs text-slate-500">
-                Jogo {currentGame.number} de {games.length}
-                {isCurrentLocked && <span className="ml-2 text-copa-green">🔒 confirmado</span>}
+        {/* Game rows */}
+        {activeGroupGames.map(game => {
+          const [score1, score2] = scores[game.id] ?? ['', '']
+          const isPredictionLocked = lockedPredictions.get(game.id)?.isLocked ?? false
+          const isSaving = savingGames[game.id] ?? false
+          const matchDate = new Date(game.matchDate)
+          const dateStr = matchDate.toLocaleDateString('pt-BR', {
+            weekday: 'short',
+            day: '2-digit',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+          return (
+            <div key={game.id} className="card p-3">
+              <p className="text-xs text-slate-500 text-center mb-2.5">
+                {dateStr}
+                {isSaving && <span className="ml-1 text-copa-green"> · 💾</span>}
+                {isPredictionLocked && <span className="ml-1 text-copa-green"> · 🔒</span>}
               </p>
-            </div>
-          </motion.div>
-        </AnimatePresence>
-      </div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                  <span className="text-sm font-semibold text-white">
+                    {TEAM_ABBR[game.team1] ?? game.team1}
+                  </span>
+                  <img
+                    src={`/flags/${FLAG_CODES[game.team1] ?? 'xx'}.png`}
+                    alt={game.team1}
+                    className="w-8 h-6 object-cover rounded-sm shrink-0"
+                  />
+                </div>
 
-      {/* Navigation buttons */}
-      <div className="px-5 pt-4 pb-8 space-y-3">
-        {currentIndex < games.length - 1 ? (
-          <button
-            ref={nextButtonRef}
-            className={`btn-primary ${s1 === '' || s2 === '' ? 'opacity-40' : ''}`}
-            onClick={() => goToGame(1)}
-            disabled={s1 === '' || s2 === '' || isSaving}
-          >
-            {isSaving ? 'Salvando...' : 'Próximo jogo →'}
-          </button>
-        ) : (
-          <button
-            className="btn-primary"
-            onClick={saveAndConfirm}
-            disabled={filledCount < games.length || isSaving}
-          >
-            {filledCount < games.length
-              ? `Faltam ${games.length - filledCount} palpites`
-              : '🏆 Confirmar todos os palpites'}
-          </button>
-        )}
-        {currentIndex > 0 && (
-          <button className="btn-secondary" onClick={() => goToGame(-1)}>
-            ← Anterior
-          </button>
-        )}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <input
+                    ref={el => { score1Refs.current[game.id] = el }}
+                    type="text"
+                    inputMode="numeric"
+                    value={score1}
+                    onChange={e => handleScoreChange(game.id, 0, e.target.value)}
+                    onFocus={e => e.target.select()}
+                    disabled={isPredictionLocked}
+                    placeholder="–"
+                    className={`w-11 h-11 text-center text-lg font-bold bg-copa-dark border-2 border-copa-border rounded-xl text-white focus:outline-none focus:border-copa-gold transition-colors ${isPredictionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  />
+                  <span className="text-slate-500 font-bold text-base">×</span>
+                  <input
+                    ref={el => { score2Refs.current[game.id] = el }}
+                    type="text"
+                    inputMode="numeric"
+                    value={score2}
+                    onChange={e => handleScoreChange(game.id, 1, e.target.value)}
+                    onFocus={e => e.target.select()}
+                    disabled={isPredictionLocked}
+                    placeholder="–"
+                    className={`w-11 h-11 text-center text-lg font-bold bg-copa-dark border-2 border-copa-border rounded-xl text-white focus:outline-none focus:border-copa-gold transition-colors ${isPredictionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-1">
+                  <img
+                    src={`/flags/${FLAG_CODES[game.team2] ?? 'xx'}.png`}
+                    alt={game.team2}
+                    className="w-8 h-6 object-cover rounded-sm shrink-0"
+                  />
+                  <span className="text-sm font-semibold text-white">
+                    {TEAM_ABBR[game.team2] ?? game.team2}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+
+        <button
+          className="btn-primary mt-2"
+          onClick={() => setShowConfirm(true)}
+          disabled={filledCount < games.length}
+        >
+          {filledCount < games.length
+            ? `Faltam ${games.length - filledCount} palpites`
+            : '🏆 Confirmar todos os palpites'}
+        </button>
       </div>
     </div>
   )
