@@ -14,6 +14,53 @@ function getMedalEmoji(position: number): string {
   return `${position}º`
 }
 
+interface GameCardProps {
+  game: Game
+  dateStr?: string
+  prediction?: Prediction
+}
+
+function GameCard({ game, dateStr, prediction }: GameCardProps) {
+  return (
+    <div className="card p-3">
+      {dateStr && (
+        <p className="text-xs text-copa-gold font-bold text-center mb-2">
+          Grupo {game.group} · {dateStr}
+        </p>
+      )}
+      <div className="flex flex-col items-center gap-1">
+        <div className="flex items-center gap-2">
+          <FlagImage team={game.team1} size={22} className="shrink-0" />
+          <span className="text-sm font-semibold text-white w-10 text-left">{TEAM_ABBR[game.team1] ?? game.team1}</span>
+        </div>
+        <span className="text-sm font-bold text-white">
+          {game.score1 !== null ? `${game.score1} × ${game.score2}` : '-'}
+        </span>
+        <div className="flex items-center gap-2">
+          <FlagImage team={game.team2} size={22} className="shrink-0" />
+          <span className="text-sm font-semibold text-white w-10 text-left">{TEAM_ABBR[game.team2] ?? game.team2}</span>
+        </div>
+      </div>
+      {prediction && game.score1 !== null && (
+        <div className={`mt-2 text-center text-xs py-1 rounded-lg font-medium ${
+          prediction.points === 3
+            ? 'bg-copa-green/15 text-copa-green'
+            : prediction.points === 1
+            ? 'bg-copa-gold/15 text-copa-gold'
+            : 'bg-red-500/10 text-copa-red'
+        }`}>
+          Meu palpite: {prediction.score1} × {prediction.score2}
+        </div>
+      )}
+      {prediction && game.score1 === null && (
+        <p className="text-xs text-slate-500 text-center mt-2">
+          Meu palpite: {prediction.score1} × {prediction.score2}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function RankingPage() {
   const { poolCode } = useParams<{ poolCode: string }>()
   const navigate = useNavigate()
@@ -155,29 +202,13 @@ export default function RankingPage() {
                     const prediction = myPredictions.get(game.id)
                     const matchDate = new Date(game.matchDate)
                     const dateStr = matchDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', weekday: 'short' })
-
                     return (
-                      <div key={game.id} className="card p-3">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs text-copa-gold font-bold">Grupo {game.group} · {dateStr}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <FlagImage team={game.team1} size={24} className="shrink-0" />
-                            <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team1] ?? game.team1}</span>
-                          </div>
-                          <span className="text-slate-500 text-xs shrink-0 font-medium">vs</span>
-                          <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-                            <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team2] ?? game.team2}</span>
-                            <FlagImage team={game.team2} size={24} className="shrink-0" />
-                          </div>
-                        </div>
-                        {prediction && (
-                          <p className="text-xs text-slate-500 text-center mt-2">
-                            Meu palpite: {prediction.score1} × {prediction.score2}
-                          </p>
-                        )}
-                      </div>
+                      <GameCard
+                        key={game.id}
+                        game={game}
+                        dateStr={dateStr}
+                        prediction={prediction}
+                      />
                     )
                   })}
                 </div>
@@ -190,34 +221,12 @@ export default function RankingPage() {
                 <div className="space-y-2">
                   {finishedGames.map(game => {
                     const prediction = myPredictions.get(game.id)
-
                     return (
-                      <div key={game.id} className="card p-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <FlagImage team={game.team1} size={24} className="shrink-0" />
-                            <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team1] ?? game.team1}</span>
-                          </div>
-                          <span className="text-sm font-bold text-white bg-copa-border px-2 py-0.5 rounded shrink-0">
-                            {game.score1} × {game.score2}
-                          </span>
-                          <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-                            <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team2] ?? game.team2}</span>
-                            <FlagImage team={game.team2} size={24} className="shrink-0" />
-                          </div>
-                        </div>
-                        {prediction && (
-                          <div className={`mt-2 text-center text-xs py-1 rounded-lg font-medium ${
-                            prediction.points === 3
-                              ? 'bg-copa-green/15 text-copa-green'
-                              : prediction.points === 1
-                              ? 'bg-copa-gold/15 text-copa-gold'
-                              : 'bg-red-500/10 text-copa-red'
-                          }`}>
-                            Meu palpite: {prediction.score1} × {prediction.score2}
-                          </div>
-                        )}
-                      </div>
+                      <GameCard
+                        key={game.id}
+                        game={game}
+                        prediction={prediction}
+                      />
                     )
                   })}
                 </div>
