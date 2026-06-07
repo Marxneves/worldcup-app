@@ -98,6 +98,7 @@ export default function PredictionsPage() {
 
   const score1Refs = useRef<Record<string, HTMLInputElement | null>>({})
   const score2Refs = useRef<Record<string, HTMLInputElement | null>>({})
+  const swipeTouchStart = useRef<{ x: number; y: number } | null>(null)
 
   const { data: pool } = useQuery({
     queryKey: ['pool', poolCode],
@@ -145,6 +146,27 @@ export default function PredictionsPage() {
     saveMutation.mutateAsync({ gameId, score1, score2 })
       .catch(() => {})
       .finally(() => setSavingGames(prev => ({ ...prev, [gameId]: false })))
+  }
+
+  function handleSwipeTouchStart(e: React.TouchEvent) {
+    swipeTouchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+
+  function handleSwipeTouchEnd(e: React.TouchEvent) {
+    if (!swipeTouchStart.current) return
+    const deltaX = e.changedTouches[0].clientX - swipeTouchStart.current.x
+    const deltaY = e.changedTouches[0].clientY - swipeTouchStart.current.y
+    swipeTouchStart.current = null
+
+    if (Math.abs(deltaX) < 60 || Math.abs(deltaX) < Math.abs(deltaY)) return
+
+    const groupIndex = GROUPS.indexOf(activeGroup)
+    if (deltaX < 0 && groupIndex < GROUPS.length - 1) {
+      setActiveGroup(GROUPS[groupIndex + 1])
+    }
+    if (deltaX > 0 && groupIndex > 0) {
+      setActiveGroup(GROUPS[groupIndex - 1])
+    }
   }
 
   function handleScoreChange(gameId: string, team: 0 | 1, value: string) {
@@ -279,8 +301,12 @@ export default function PredictionsPage() {
         </div>
       </div>
 
-      {/* Scrollable content */}
-      <div className="flex-1 px-5 pb-8 pt-4 space-y-3">
+      {/* Scrollable content — touch handlers detect horizontal swipe to change group */}
+      <div
+        className="flex-1 px-5 pb-8 pt-4 space-y-3"
+        onTouchStart={handleSwipeTouchStart}
+        onTouchEnd={handleSwipeTouchEnd}
+      >
         {/* Live standings */}
         <div className="card p-3">
           <p className="text-xs font-bold uppercase tracking-wider text-copa-gold mb-0.5">
