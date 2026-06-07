@@ -65,10 +65,10 @@ export default function PoolsPage() {
     <div className="min-h-screen px-5 py-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-extrabold text-white">⚽ Meus Bolões</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Olá, {user?.name}!</p>
+          <h1 className="text-2xl font-extrabold text-copa-dark">⚽ Meus Bolões</h1>
+          <p className="text-slate-600 text-sm mt-0.5">Olá, {user?.name}!</p>
         </div>
-        <button onClick={logout} className="text-slate-500 text-sm">Sair</button>
+        <button onClick={logout} className="text-slate-600 text-sm">Sair</button>
       </div>
 
       <AnimatePresence mode="wait">
@@ -81,7 +81,7 @@ export default function PoolsPage() {
             transition={{ duration: 0.2 }}
           >
             {isLoading ? (
-              <div className="text-slate-500 text-center py-12">Carregando...</div>
+              <div className="text-slate-600 text-center py-12">Carregando...</div>
             ) : data && data.length > 0 ? (
               <div className="space-y-3 mb-6">
                 {data.map(pool => (
@@ -91,20 +91,20 @@ export default function PoolsPage() {
                     onClick={() => navigate(`/ranking/${pool.code}`)}
                   >
                     <div>
-                      <p className="font-bold text-white">{pool.name}</p>
-                      <p className="text-slate-400 text-sm">
+                      <p className="font-bold text-copa-dark">{pool.name}</p>
+                      <p className="text-slate-600 text-sm">
                         Código: <span className="text-copa-gold font-mono font-bold">{pool.code}</span>
                         {' · '}{pool.memberCount} participante{(pool.memberCount ?? 0) > 1 ? 's' : ''}
                       </p>
                     </div>
-                    <span className="text-slate-400 text-xl">›</span>
+                    <span className="text-slate-600 text-xl">›</span>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="text-center py-10">
                 <p className="text-4xl mb-3">🏆</p>
-                <p className="text-slate-400">Você ainda não está em nenhum bolão</p>
+                <p className="text-slate-600">Você ainda não está em nenhum bolão</p>
               </div>
             )}
 
@@ -126,13 +126,13 @@ export default function PoolsPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -30 }}
           >
-            <button onClick={() => setMode('list')} className="text-slate-400 mb-6 flex items-center gap-2">
+            <button onClick={() => setMode('list')} className="text-slate-600 mb-6 flex items-center gap-2">
               ← Voltar
             </button>
-            <h2 className="text-xl font-bold text-white mb-6">Entrar em um bolão</h2>
+            <h2 className="text-xl font-bold text-copa-dark mb-6">Entrar em um bolão</h2>
             <form onSubmit={handleJoin} className="space-y-4">
               <input
-                className="input-field uppercase text-center text-2xl tracking-widest font-bold"
+                className="input-field uppercase text-center text-2xl tracking-widest font-bold placeholder:text-sm placeholder:tracking-normal placeholder:font-normal placeholder:normal-case"
                 placeholder="Código (ex: ABC123)"
                 value={code}
                 onChange={e => setCode(e.target.value.toUpperCase().slice(0, 6))}
@@ -154,10 +154,10 @@ export default function PoolsPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -30 }}
           >
-            <button onClick={() => setMode('list')} className="text-slate-400 mb-6 flex items-center gap-2">
+            <button onClick={() => setMode('list')} className="text-slate-600 mb-6 flex items-center gap-2">
               ← Voltar
             </button>
-            <h2 className="text-xl font-bold text-white mb-6">Criar novo bolão</h2>
+            <h2 className="text-xl font-bold text-copa-dark mb-6">Criar novo bolão</h2>
             {feedback ? (
               <motion.div
                 className="text-center py-8"
@@ -165,8 +165,8 @@ export default function PoolsPage() {
                 animate={{ scale: 1, opacity: 1 }}
               >
                 <p className="text-4xl mb-3">🎉</p>
-                <p className="text-white font-bold text-lg">{feedback}</p>
-                <p className="text-slate-400 text-sm mt-2">Compartilhe o código com sua família!</p>
+                <p className="text-copa-dark font-bold text-lg">{feedback}</p>
+                <p className="text-slate-600 text-sm mt-2">Compartilhe o código com sua família!</p>
               </motion.div>
             ) : (
               <form onSubmit={handleCreate} className="space-y-4">

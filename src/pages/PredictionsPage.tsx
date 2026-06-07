@@ -303,7 +303,7 @@ export default function PredictionsPage() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Sticky header */}
-      <div className="px-5 pt-6 pb-3 bg-copa-cream border-b border-copa-border sticky top-0 z-20">
+      <div className="px-5 pt-6 pb-3 border-b border-copa-border sticky top-0 z-20" style={{ backgroundColor: '#F5EDD0' }}>
         <div className="flex justify-between items-center mb-3">
           <button
             onClick={() => navigate(`/ranking/${poolCode}`)}

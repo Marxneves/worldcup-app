@@ -72,14 +72,14 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen px-5 py-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-xl font-extrabold text-white">🔧 Admin</h1>
-        <button onClick={() => navigate('/pools')} className="text-slate-400 text-sm">← Voltar</button>
+        <h1 className="text-xl font-extrabold text-copa-dark">🔧 Admin</h1>
+        <button onClick={() => navigate('/pools')} className="text-slate-600 text-sm">← Voltar</button>
       </div>
 
       <div className="space-y-5">
         {/* Manual update */}
         <div className="card p-5">
-          <h2 className="font-bold text-white mb-4">Inserir resultado manualmente</h2>
+          <h2 className="font-bold text-copa-dark mb-4">Inserir resultado manualmente</h2>
           <form onSubmit={handleUpdateResult} className="space-y-3">
             <input
               className="input-field"
@@ -100,7 +100,7 @@ export default function AdminPage() {
                 min="0"
                 required
               />
-              <span className="text-slate-500 text-2xl flex items-center font-bold">x</span>
+              <span className="text-slate-600 text-2xl flex items-center font-bold">x</span>
               <input
                 className="input-field text-center text-xl font-bold"
                 type="number"
@@ -117,8 +117,8 @@ export default function AdminPage() {
 
         {/* Auto fetch */}
         <div className="card p-5">
-          <h2 className="font-bold text-white mb-2">Buscar do GE Globo</h2>
-          <p className="text-slate-400 text-sm mb-4">Tenta buscar resultados automaticamente. Use como complemento ao cadastro manual.</p>
+          <h2 className="font-bold text-copa-dark mb-2">Buscar do GE Globo</h2>
+          <p className="text-slate-600 text-sm mb-4">Tenta buscar resultados automaticamente. Use como complemento ao cadastro manual.</p>
           <button
             className="btn-secondary"
             onClick={handleFetchFromGlobo}
@@ -149,20 +149,20 @@ export default function AdminPage() {
 
         {/* Status */}
         <div className="card p-5">
-          <h2 className="font-bold text-white mb-3">Status dos jogos</h2>
+          <h2 className="font-bold text-copa-dark mb-3">Status dos jogos</h2>
           <div className="flex gap-4 text-center mb-4">
             <div className="flex-1 bg-copa-green/10 rounded-xl p-3">
               <p className="text-2xl font-extrabold text-copa-green">{finishedGames.length}</p>
-              <p className="text-xs text-slate-400">com resultado</p>
+              <p className="text-xs text-slate-600">com resultado</p>
             </div>
             <div className="flex-1 bg-slate-800 rounded-xl p-3">
-              <p className="text-2xl font-extrabold text-slate-300">{pendingGames.length}</p>
-              <p className="text-xs text-slate-400">aguardando</p>
+              <p className="text-2xl font-extrabold text-slate-600">{pendingGames.length}</p>
+              <p className="text-xs text-slate-600">aguardando</p>
             </div>
           </div>
           {finishedGames.slice(-5).reverse().map(game => (
             <div key={game.id} className="flex justify-between items-center py-2 border-b border-copa-border last:border-0">
-              <span className="text-sm text-slate-300">Jogo {game.number} · {game.team1} x {game.team2}</span>
+              <span className="text-sm text-slate-600">Jogo {game.number} · {game.team1} x {game.team2}</span>
               <span className="text-copa-gold font-bold text-sm">{game.score1} x {game.score2}</span>
             </div>
           ))}
