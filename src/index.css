@@ -5,8 +5,8 @@
 @layer base {
   html, body, #root {
     height: 100%;
-    background-color: #0a0e1a;
-    color: #f1f5f9;
+    background-color: #F5EDD0;
+    color: #1a1a1a;
   }
 
   input[type="number"]::-webkit-inner-spin-button,
@@ -20,6 +20,11 @@
   }
 }
 
+.login-phone-input::placeholder {
+  color: #F5EDD0;
+  opacity: 1;
+}
+
 @layer components {
   .btn-primary {
     @apply w-full py-4 rounded-2xl font-bold text-lg bg-copa-gold text-copa-dark
@@ -28,18 +33,18 @@
 
   .btn-secondary {
     @apply w-full py-4 rounded-2xl font-semibold text-base border border-copa-border
-           text-slate-300 active:scale-95 transition-transform duration-100;
+           text-copa-dark active:scale-95 transition-transform duration-100;
   }
 
   .input-field {
     @apply w-full bg-copa-card border border-copa-border rounded-2xl px-4 py-4
-           text-white text-base placeholder-slate-500 focus:outline-none
+           text-copa-dark text-base placeholder-slate-500 focus:outline-none
            focus:border-copa-gold/60 focus:ring-1 focus:ring-copa-gold/30 transition-colors;
   }
 
   .score-input {
-    @apply w-16 h-16 text-center text-2xl font-bold bg-copa-dark border-2 border-copa-border
-           rounded-2xl text-white focus:outline-none focus:border-copa-gold transition-colors;
+    @apply w-16 h-16 text-center text-2xl font-bold bg-copa-card border-2 border-copa-border
+           rounded-2xl text-copa-dark focus:outline-none focus:border-copa-gold transition-colors;
   }
 
   .score-input:focus::placeholder {
@@ -47,6 +52,8 @@
   }
 
   .card {
-    @apply bg-copa-card border border-copa-border rounded-3xl;
+    background-color: #FFFDF5;
+    border: 1px solid #D9CBAD;
+    border-radius: 1.5rem;
   }
 }

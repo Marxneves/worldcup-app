@@ -5,16 +5,22 @@ export default {
     extend: {
       colors: {
         copa: {
-          dark: '#0a0e1a',
-          card: '#111827',
-          border: '#1e2d40',
-          gold: '#f5c518',
-          green: '#00a651',
+          dark: '#1a1a1a',
+          card: '#FFFDF5',
+          border: '#D9CBAD',
+          gold: '#FFD100',
+          canary: '#E5CE75',
+          menta: '#00FEA8',
+          teal: '#295A71',
+          royal: '#274CA3',
           red: '#e63946',
+          cream: '#F5EDD0',
         },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        caveat: ['Caveat', 'cursive'],
+        cormorant: ['Cormorant Garamond', 'serif'],
       },
     },
   },
