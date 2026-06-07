@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import LoginPage from './pages/LoginPage'
@@ -6,6 +7,7 @@ import PoolsPage from './pages/PoolsPage'
 import PredictionsPage from './pages/PredictionsPage'
 import RankingPage from './pages/RankingPage'
 import AdminPage from './pages/AdminPage'
+import api from './services/api'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
@@ -13,6 +15,10 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    api.get('/health').catch(() => {})
+  }, [])
+
   return (
     <BrowserRouter>
       <div className="min-h-full max-w-md mx-auto">
