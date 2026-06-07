@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { RankingEntry, Game, Prediction, Pool } from '../types'
-import FlagImage from '../components/FlagImage'
+import FlagImage, { TEAM_ABBR } from '../components/FlagImage'
 
 function getMedalEmoji(position: number): string {
   if (position === 1) return '🥇'
@@ -164,11 +164,11 @@ export default function RankingPage() {
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             <FlagImage team={game.team1} size={24} className="shrink-0" />
-                            <span className="text-sm font-semibold text-white truncate">{game.team1}</span>
+                            <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team1] ?? game.team1}</span>
                           </div>
                           <span className="text-slate-500 text-xs shrink-0 font-medium">vs</span>
                           <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-                            <span className="text-sm font-semibold text-white truncate text-right">{game.team2}</span>
+                            <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team2] ?? game.team2}</span>
                             <FlagImage team={game.team2} size={24} className="shrink-0" />
                           </div>
                         </div>
@@ -196,13 +196,13 @@ export default function RankingPage() {
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             <FlagImage team={game.team1} size={24} className="shrink-0" />
-                            <span className="text-sm font-semibold text-white truncate">{game.team1}</span>
+                            <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team1] ?? game.team1}</span>
                           </div>
                           <span className="text-sm font-bold text-white bg-copa-border px-2 py-0.5 rounded shrink-0">
                             {game.score1} × {game.score2}
                           </span>
                           <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-                            <span className="text-sm font-semibold text-white truncate text-right">{game.team2}</span>
+                            <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team2] ?? game.team2}</span>
                             <FlagImage team={game.team2} size={24} className="shrink-0" />
                           </div>
                         </div>

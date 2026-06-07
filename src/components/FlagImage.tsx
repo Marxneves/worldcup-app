@@ -1,3 +1,18 @@
+export const TEAM_ABBR: Record<string, string> = {
+  'México': 'MEX', 'África do Sul': 'RSA', 'Coreia do Sul': 'KOR', 'Tchéquia': 'CZE',
+  'Canadá': 'CAN', 'Bósnia e Herzegovina': 'BIH', 'Estados Unidos': 'USA', 'Paraguai': 'PAR',
+  'Catar': 'QAT', 'Suíça': 'SUI', 'Brasil': 'BRA', 'Marrocos': 'MAR',
+  'Haiti': 'HAI', 'Escócia': 'SCO', 'Austrália': 'AUS', 'Turquia': 'TUR',
+  'Alemanha': 'GER', 'Curaçao': 'CUW', 'Holanda': 'NED', 'Japão': 'JPN',
+  'Costa do Marfim': 'CIV', 'Equador': 'ECU', 'Suécia': 'SWE', 'Tunísia': 'TUN',
+  'Espanha': 'ESP', 'Cabo Verde': 'CPV', 'Bélgica': 'BEL', 'Egito': 'EGY',
+  'Arábia Saudita': 'KSA', 'Uruguai': 'URU', 'Irã': 'IRI', 'Nova Zelândia': 'NZL',
+  'França': 'FRA', 'Senegal': 'SEN', 'Iraque': 'IRQ', 'Noruega': 'NOR',
+  'Argentina': 'ARG', 'Argélia': 'ALG', 'Áustria': 'AUT', 'Jordânia': 'JOR',
+  'Portugal': 'POR', 'RD Congo': 'COD', 'Inglaterra': 'ENG', 'Croácia': 'CRO',
+  'Gana': 'GHA', 'Panamá': 'PAN', 'Uzbequistão': 'UZB', 'Colômbia': 'COL',
+}
+
 export const FLAG_CODES: Record<string, string> = {
   'México': 'mx',
   'África do Sul': 'za',
