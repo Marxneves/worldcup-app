@@ -28,17 +28,17 @@ function GameCard({ game, dateStr, prediction }: GameCardProps) {
           Grupo {game.group} · {dateStr}
         </p>
       )}
-      <div className="flex flex-col items-center gap-1">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center gap-1.5">
           <FlagImage team={game.team1} size={22} className="shrink-0" />
-          <span className="text-sm font-semibold text-white w-10 text-left">{TEAM_ABBR[game.team1] ?? game.team1}</span>
+          <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team1] ?? game.team1}</span>
         </div>
-        <span className="text-sm font-bold text-white">
+        <span className="text-sm font-bold text-white px-1">
           {game.score1 !== null ? `${game.score1} × ${game.score2}` : '-'}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team2] ?? game.team2}</span>
           <FlagImage team={game.team2} size={22} className="shrink-0" />
-          <span className="text-sm font-semibold text-white w-10 text-left">{TEAM_ABBR[game.team2] ?? game.team2}</span>
         </div>
       </div>
       {prediction && game.score1 !== null && (
