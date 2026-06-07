@@ -1,12 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import api from '../services/api'
 import { Game, Prediction, Pool } from '../types'
 import { FLAG_CODES, TEAM_ABBR } from '../components/FlagImage'
 
 const GROUPS = 'ABCDEFGHIJKL'.split('')
+
+const SLIDE_VARIANTS = {
+  enter: (direction: number) => ({ x: direction > 0 ? '100%' : '-100%' }),
+  center: { x: 0 },
+  exit: (direction: number) => ({ x: direction > 0 ? '-100%' : '100%' }),
+}
+const SPRING = { type: 'spring', stiffness: 400, damping: 40 }
 
 interface TeamStats {
   team: string
@@ -90,6 +97,7 @@ export default function PredictionsPage() {
   const navigate = useNavigate()
 
   const [activeGroup, setActiveGroup] = useState('A')
+  const [groupDirection, setGroupDirection] = useState(1)
   const [scores, setScores] = useState<Record<string, [string, string]>>({})
   const [savingGames, setSavingGames] = useState<Record<string, boolean>>({})
   const [showConfirm, setShowConfirm] = useState(false)
@@ -148,6 +156,13 @@ export default function PredictionsPage() {
       .finally(() => setSavingGames(prev => ({ ...prev, [gameId]: false })))
   }
 
+  function navigateToGroup(targetGroup: string) {
+    const currentIndex = GROUPS.indexOf(activeGroup)
+    const targetIndex = GROUPS.indexOf(targetGroup)
+    setGroupDirection(targetIndex > currentIndex ? 1 : -1)
+    setActiveGroup(targetGroup)
+  }
+
   function handleSwipeTouchStart(e: React.TouchEvent) {
     swipeTouchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
   }
@@ -162,10 +177,10 @@ export default function PredictionsPage() {
 
     const groupIndex = GROUPS.indexOf(activeGroup)
     if (deltaX < 0 && groupIndex < GROUPS.length - 1) {
-      setActiveGroup(GROUPS[groupIndex + 1])
+      navigateToGroup(GROUPS[groupIndex + 1])
     }
     if (deltaX > 0 && groupIndex > 0) {
-      setActiveGroup(GROUPS[groupIndex - 1])
+      navigateToGroup(GROUPS[groupIndex - 1])
     }
   }
 
@@ -215,6 +230,7 @@ export default function PredictionsPage() {
   ).length
 
   const lockedPredictions = new Map(savedPredictions?.map(p => [p.gameId, p]) ?? [])
+  const allFilled = filledCount === games.length
 
   if (showConfirm) {
     return (
@@ -285,7 +301,7 @@ export default function PredictionsPage() {
             return (
               <button
                 key={groupLetter}
-                onClick={() => setActiveGroup(groupLetter)}
+                onClick={() => navigateToGroup(groupLetter)}
                 className={`shrink-0 h-8 w-8 rounded-lg text-sm font-bold transition-all ${
                   activeGroup === groupLetter
                     ? 'bg-copa-gold text-copa-dark'
@@ -301,149 +317,160 @@ export default function PredictionsPage() {
         </div>
       </div>
 
-      {/* Scrollable content — touch handlers detect horizontal swipe to change group */}
+      {/* Carousel — clips horizontal overflow while allowing vertical page scroll */}
       <div
-        className="flex-1 px-5 pb-8 pt-4 space-y-3"
+        className="overflow-hidden"
         onTouchStart={handleSwipeTouchStart}
         onTouchEnd={handleSwipeTouchEnd}
       >
-        {/* Live standings */}
-        <div className="card p-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-copa-gold mb-0.5">
-            Classificação · Grupo {activeGroup}
-          </p>
-          <p className="text-xs text-slate-500 mb-2">Simulação pelos seus palpites</p>
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-slate-500 border-b border-copa-border">
-                <th className="text-left pb-1.5 font-medium w-5">#</th>
-                <th className="text-left pb-1.5 font-medium">Seleção</th>
-                <th className="text-center pb-1.5 font-medium w-6">J</th>
-                <th className="text-center pb-1.5 font-medium w-6">V</th>
-                <th className="text-center pb-1.5 font-medium w-6">E</th>
-                <th className="text-center pb-1.5 font-medium w-6">D</th>
-                <th className="text-center pb-1.5 font-medium w-8">SG</th>
-                <th className="text-center pb-1.5 font-bold text-white w-8">Pts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {standings.map((stat, index) => {
-                const goalDifference = stat.goalsFor - stat.goalsAgainst
-                const isQualifying = index < 2
-                return (
-                  <tr key={stat.team} className={isQualifying ? 'text-white' : 'text-slate-500'}>
-                    <td className="py-1.5">
-                      <span className={`text-center inline-block w-4 ${isQualifying ? 'text-copa-gold font-bold' : ''}`}>
-                        {index + 1}
-                      </span>
-                    </td>
-                    <td className="py-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <img
-                          src={`/flags/${FLAG_CODES[stat.team] ?? 'xx'}.png`}
-                          alt={stat.team}
-                          className="w-5 h-3.5 object-cover rounded-sm shrink-0"
-                        />
-                        <span>{TEAM_ABBR[stat.team] ?? stat.team}</span>
-                      </div>
-                    </td>
-                    <td className="text-center py-1.5">{stat.played}</td>
-                    <td className="text-center py-1.5">{stat.won}</td>
-                    <td className="text-center py-1.5">{stat.drawn}</td>
-                    <td className="text-center py-1.5">{stat.lost}</td>
-                    <td className="text-center py-1.5">
-                      {goalDifference > 0 ? `+${goalDifference}` : goalDifference}
-                    </td>
-                    <td className="text-center py-1.5 font-bold">{stat.points}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Game rows */}
-        {activeGroupGames.map(game => {
-          const [score1, score2] = scores[game.id] ?? ['', '']
-          const isPredictionLocked = lockedPredictions.get(game.id)?.isLocked ?? false
-          const isSaving = savingGames[game.id] ?? false
-          const matchDate = new Date(game.matchDate)
-          const dateStr = matchDate.toLocaleDateString('pt-BR', {
-            weekday: 'short',
-            day: '2-digit',
-            month: 'short',
-            hour: '2-digit',
-            minute: '2-digit',
-          })
-          return (
-            <div key={game.id} className="card p-3">
-              <p className="text-xs text-slate-500 text-center mb-2.5">
-                {dateStr}
-                {isSaving && <span className="ml-1 text-copa-green"> · 💾</span>}
-                {isPredictionLocked && <span className="ml-1 text-copa-green"> · 🔒</span>}
+        <AnimatePresence mode="popLayout" custom={groupDirection}>
+          <motion.div
+            key={activeGroup}
+            custom={groupDirection}
+            variants={SLIDE_VARIANTS}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={SPRING}
+            className="px-5 pb-8 pt-4 space-y-3"
+          >
+            {/* Live standings */}
+            <div className="card p-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-copa-gold mb-0.5">
+                Classificação · Grupo {activeGroup}
               </p>
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 flex-1 justify-end">
-                  <span className="text-sm font-semibold text-white">
-                    {TEAM_ABBR[game.team1] ?? game.team1}
-                  </span>
-                  <img
-                    src={`/flags/${FLAG_CODES[game.team1] ?? 'xx'}.png`}
-                    alt={game.team1}
-                    className="w-8 h-6 object-cover rounded-sm shrink-0"
-                  />
-                </div>
-
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <input
-                    ref={el => { score1Refs.current[game.id] = el }}
-                    type="text"
-                    inputMode="numeric"
-                    value={score1}
-                    onChange={e => handleScoreChange(game.id, 0, e.target.value)}
-                    onFocus={e => e.target.select()}
-                    disabled={isPredictionLocked}
-                    placeholder="–"
-                    className={`w-11 h-11 text-center text-lg font-bold bg-copa-dark border-2 border-copa-border rounded-xl text-white focus:outline-none focus:border-copa-gold transition-colors ${isPredictionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  />
-                  <span className="text-slate-500 font-bold text-base">×</span>
-                  <input
-                    ref={el => { score2Refs.current[game.id] = el }}
-                    type="text"
-                    inputMode="numeric"
-                    value={score2}
-                    onChange={e => handleScoreChange(game.id, 1, e.target.value)}
-                    onFocus={e => e.target.select()}
-                    disabled={isPredictionLocked}
-                    placeholder="–"
-                    className={`w-11 h-11 text-center text-lg font-bold bg-copa-dark border-2 border-copa-border rounded-xl text-white focus:outline-none focus:border-copa-gold transition-colors ${isPredictionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  />
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-1">
-                  <img
-                    src={`/flags/${FLAG_CODES[game.team2] ?? 'xx'}.png`}
-                    alt={game.team2}
-                    className="w-8 h-6 object-cover rounded-sm shrink-0"
-                  />
-                  <span className="text-sm font-semibold text-white">
-                    {TEAM_ABBR[game.team2] ?? game.team2}
-                  </span>
-                </div>
-              </div>
+              <p className="text-xs text-slate-500 mb-2">Simulação pelos seus palpites</p>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-slate-500 border-b border-copa-border">
+                    <th className="text-left pb-1.5 font-medium w-5">#</th>
+                    <th className="text-left pb-1.5 font-medium">Seleção</th>
+                    <th className="text-center pb-1.5 font-medium w-6">J</th>
+                    <th className="text-center pb-1.5 font-medium w-6">V</th>
+                    <th className="text-center pb-1.5 font-medium w-6">E</th>
+                    <th className="text-center pb-1.5 font-medium w-6">D</th>
+                    <th className="text-center pb-1.5 font-medium w-8">SG</th>
+                    <th className="text-center pb-1.5 font-bold text-white w-8">Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {standings.map((stat, index) => {
+                    const goalDifference = stat.goalsFor - stat.goalsAgainst
+                    const isQualifying = index < 2
+                    return (
+                      <tr key={stat.team} className={isQualifying ? 'text-white' : 'text-slate-500'}>
+                        <td className="py-1.5">
+                          <span className={`text-center inline-block w-4 ${isQualifying ? 'text-copa-gold font-bold' : ''}`}>
+                            {index + 1}
+                          </span>
+                        </td>
+                        <td className="py-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <img
+                              src={`/flags/${FLAG_CODES[stat.team] ?? 'xx'}.png`}
+                              alt={stat.team}
+                              className="w-5 h-3.5 object-cover rounded-sm shrink-0"
+                            />
+                            <span>{TEAM_ABBR[stat.team] ?? stat.team}</span>
+                          </div>
+                        </td>
+                        <td className="text-center py-1.5">{stat.played}</td>
+                        <td className="text-center py-1.5">{stat.won}</td>
+                        <td className="text-center py-1.5">{stat.drawn}</td>
+                        <td className="text-center py-1.5">{stat.lost}</td>
+                        <td className="text-center py-1.5">
+                          {goalDifference > 0 ? `+${goalDifference}` : goalDifference}
+                        </td>
+                        <td className="text-center py-1.5 font-bold">{stat.points}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-          )
-        })}
 
-        <button
-          className="btn-primary mt-2"
-          onClick={() => setShowConfirm(true)}
-          disabled={filledCount < games.length}
-        >
-          {filledCount < games.length
-            ? `Faltam ${games.length - filledCount} palpites`
-            : '🏆 Confirmar todos os palpites'}
-        </button>
+            {/* Game rows */}
+            {activeGroupGames.map(game => {
+              const [score1, score2] = scores[game.id] ?? ['', '']
+              const isPredictionLocked = lockedPredictions.get(game.id)?.isLocked ?? false
+              const isSaving = savingGames[game.id] ?? false
+              const matchDate = new Date(game.matchDate)
+              const dateStr = matchDate.toLocaleDateString('pt-BR', {
+                weekday: 'long',
+                day: '2-digit',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'America/Sao_Paulo',
+              })
+              return (
+                <div key={game.id} className="card p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-1 justify-end">
+                      <span className="text-sm font-semibold text-white">
+                        {TEAM_ABBR[game.team1] ?? game.team1}
+                      </span>
+                      <img
+                        src={`/flags/${FLAG_CODES[game.team1] ?? 'xx'}.png`}
+                        alt={game.team1}
+                        className="w-8 h-6 object-cover rounded-sm shrink-0"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <input
+                        ref={el => { score1Refs.current[game.id] = el }}
+                        type="text"
+                        inputMode="numeric"
+                        value={score1}
+                        onChange={e => handleScoreChange(game.id, 0, e.target.value)}
+                        onFocus={e => e.target.select()}
+                        disabled={isPredictionLocked}
+                        placeholder="–"
+                        className={`w-11 h-11 text-center text-lg font-bold bg-copa-dark border-2 border-copa-border rounded-xl text-white focus:outline-none focus:border-copa-gold transition-colors ${isPredictionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      />
+                      <span className="text-slate-500 font-bold text-base">×</span>
+                      <input
+                        ref={el => { score2Refs.current[game.id] = el }}
+                        type="text"
+                        inputMode="numeric"
+                        value={score2}
+                        onChange={e => handleScoreChange(game.id, 1, e.target.value)}
+                        onFocus={e => e.target.select()}
+                        disabled={isPredictionLocked}
+                        placeholder="–"
+                        className={`w-11 h-11 text-center text-lg font-bold bg-copa-dark border-2 border-copa-border rounded-xl text-white focus:outline-none focus:border-copa-gold transition-colors ${isPredictionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-1">
+                      <img
+                        src={`/flags/${FLAG_CODES[game.team2] ?? 'xx'}.png`}
+                        alt={game.team2}
+                        className="w-8 h-6 object-cover rounded-sm shrink-0"
+                      />
+                      <span className="text-sm font-semibold text-white">
+                        {TEAM_ABBR[game.team2] ?? game.team2}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-500 text-center mt-2">
+                    {dateStr}
+                    {isSaving && <span className="ml-1 text-copa-green"> · 💾</span>}
+                    {isPredictionLocked && <span className="ml-1 text-copa-green"> · 🔒</span>}
+                  </p>
+                </div>
+              )
+            })}
+
+            {allFilled && (
+              <button className="btn-primary mt-2" onClick={() => setShowConfirm(true)}>
+                🏆 Confirmar todos os palpites
+              </button>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   )
