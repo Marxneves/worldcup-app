@@ -61,6 +61,30 @@ function applyGameResult(
   away.points++
 }
 
+function computeThirdPlaceQualifiers(
+  gamesByGroup: Record<string, Game[]>,
+  scores: Record<string, [string, string]>
+): Set<string> {
+  const thirdPlaceTeams: TeamStats[] = []
+
+  for (const groupGames of Object.values(gamesByGroup)) {
+    if (!groupGames.length) continue
+    const standings = computeGroupStandings(groupGames, scores)
+    if (standings.length >= 3) thirdPlaceTeams.push(standings[2])
+  }
+
+  thirdPlaceTeams.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points
+    const gdA = a.goalsFor - a.goalsAgainst
+    const gdB = b.goalsFor - b.goalsAgainst
+    if (gdB !== gdA) return gdB - gdA
+    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor
+    return b.won - a.won
+  })
+
+  return new Set(thirdPlaceTeams.slice(0, 8).map(t => t.team))
+}
+
 function computeGroupStandings(
   groupGames: Game[],
   scores: Record<string, [string, string]>
@@ -107,6 +131,15 @@ export default function PredictionsPage() {
   const score1Refs = useRef<Record<string, HTMLInputElement | null>>({})
   const score2Refs = useRef<Record<string, HTMLInputElement | null>>({})
   const swipeTouchStart = useRef<{ x: number; y: number } | null>(null)
+  const tabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+
+  useEffect(() => {
+    tabButtonRefs.current[activeGroup]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'center',
+    })
+  }, [activeGroup])
 
   const { data: pool } = useQuery({
     queryKey: ['pool', poolCode],
@@ -218,7 +251,7 @@ export default function PredictionsPage() {
   }
 
   if (!games || !pool) {
-    return <div className="flex items-center justify-center min-h-screen text-slate-400">Carregando...</div>
+    return <div className="flex items-center justify-center min-h-screen text-slate-600">Carregando...</div>
   }
 
   const gamesByGroup: Record<string, Game[]> = {}
@@ -231,6 +264,7 @@ export default function PredictionsPage() {
 
   const lockedPredictions = new Map(savedPredictions?.map(p => [p.gameId, p]) ?? [])
   const allFilled = filledCount === games.length
+  const isAllLocked = !!savedPredictions?.length && savedPredictions.every(p => p.isLocked)
 
   if (showConfirm) {
     return (
@@ -241,8 +275,8 @@ export default function PredictionsPage() {
       >
         <div className="text-center mb-8">
           <div className="text-6xl mb-4">🔒</div>
-          <h2 className="text-2xl font-extrabold text-white">Confirmar palpites?</h2>
-          <p className="text-slate-400 mt-3 leading-relaxed text-sm">
+          <h2 className="text-2xl font-extrabold text-copa-dark">Confirmar palpites?</h2>
+          <p className="text-slate-600 mt-3 leading-relaxed text-sm">
             Você preencheu <span className="text-copa-gold font-bold">{filledCount} de {games.length}</span> jogos.
           </p>
           <p className="text-copa-red text-sm font-semibold mt-2">
@@ -264,19 +298,20 @@ export default function PredictionsPage() {
 
   const activeGroupGames = gamesByGroup[activeGroup] ?? []
   const standings = computeGroupStandings(activeGroupGames, scores)
+  const qualifyingThirdPlaceTeams = computeThirdPlaceQualifiers(gamesByGroup, scores)
 
   return (
     <div className="min-h-screen flex flex-col">
       {/* Sticky header */}
-      <div className="px-5 pt-6 pb-3 bg-copa-dark border-b border-copa-border sticky top-0 z-20">
+      <div className="px-5 pt-6 pb-3 bg-copa-cream border-b border-copa-border sticky top-0 z-20">
         <div className="flex justify-between items-center mb-3">
           <button
             onClick={() => navigate(`/ranking/${poolCode}`)}
-            className="text-slate-400 text-sm"
+            className="text-slate-600 text-sm"
           >
             ← {pool.name}
           </button>
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-slate-600">
             {filledCount}/{games.length} palpites
           </span>
         </div>
@@ -301,13 +336,14 @@ export default function PredictionsPage() {
             return (
               <button
                 key={groupLetter}
+                ref={el => { tabButtonRefs.current[groupLetter] = el }}
                 onClick={() => navigateToGroup(groupLetter)}
                 className={`shrink-0 h-8 w-8 rounded-lg text-sm font-bold transition-all ${
                   activeGroup === groupLetter
                     ? 'bg-copa-gold text-copa-dark'
                     : isGroupComplete
                     ? 'bg-copa-green/20 border border-copa-green/40 text-copa-green'
-                    : 'bg-copa-border text-slate-400'
+                    : 'bg-copa-border text-slate-600'
                 }`}
               >
                 {groupLetter}
@@ -339,10 +375,10 @@ export default function PredictionsPage() {
               <p className="text-xs font-bold uppercase tracking-wider text-copa-gold mb-0.5">
                 Classificação · Grupo {activeGroup}
               </p>
-              <p className="text-xs text-slate-500 mb-2">Simulação pelos seus palpites</p>
+              <p className="text-xs text-slate-600 mb-2">Simulação pelos seus palpites</p>
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="text-slate-500 border-b border-copa-border">
+                  <tr className="text-slate-600 border-b border-copa-border">
                     <th className="text-left pb-1.5 font-medium w-5">#</th>
                     <th className="text-left pb-1.5 font-medium">Seleção</th>
                     <th className="text-center pb-1.5 font-medium w-6">J</th>
@@ -350,17 +386,29 @@ export default function PredictionsPage() {
                     <th className="text-center pb-1.5 font-medium w-6">E</th>
                     <th className="text-center pb-1.5 font-medium w-6">D</th>
                     <th className="text-center pb-1.5 font-medium w-8">SG</th>
-                    <th className="text-center pb-1.5 font-bold text-white w-8">Pts</th>
+                    <th className="text-center pb-1.5 font-bold text-copa-dark w-8">Pts</th>
                   </tr>
                 </thead>
                 <tbody>
                   {standings.map((stat, index) => {
                     const goalDifference = stat.goalsFor - stat.goalsAgainst
-                    const isQualifying = index < 2
+                    const isTopTwo = index < 2
+                    const isPotentialThirdQualifier = index === 2 && qualifyingThirdPlaceTeams.has(stat.team)
                     return (
-                      <tr key={stat.team} className={isQualifying ? 'text-white' : 'text-slate-500'}>
+                      <tr
+                        key={stat.team}
+                        className={
+                          isTopTwo ? 'text-copa-dark' :
+                          isPotentialThirdQualifier ? 'text-copa-menta' :
+                          'text-slate-600'
+                        }
+                      >
                         <td className="py-1.5">
-                          <span className={`text-center inline-block w-4 ${isQualifying ? 'text-copa-gold font-bold' : ''}`}>
+                          <span className={`text-center inline-block w-4 ${
+                            isTopTwo ? 'text-copa-gold font-bold' :
+                            isPotentialThirdQualifier ? 'text-copa-menta font-bold' :
+                            ''
+                          }`}>
                             {index + 1}
                           </span>
                         </td>
@@ -387,84 +435,137 @@ export default function PredictionsPage() {
                   })}
                 </tbody>
               </table>
+              <div className="flex gap-4 text-xs text-slate-600 mt-2 pt-2 border-t border-copa-border">
+                <span className="flex items-center gap-1">
+                  <span className="text-copa-gold font-bold text-base leading-none">●</span> Classificado direto
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="text-copa-menta font-bold text-base leading-none">●</span> Melhor 3º geral
+                </span>
+              </div>
             </div>
 
-            {/* Game rows */}
-            {activeGroupGames.map(game => {
-              const [score1, score2] = scores[game.id] ?? ['', '']
-              const isPredictionLocked = lockedPredictions.get(game.id)?.isLocked ?? false
-              const isSaving = savingGames[game.id] ?? false
-              const matchDate = new Date(game.matchDate)
-              const dateStr = matchDate.toLocaleDateString('pt-BR', {
-                weekday: 'long',
-                day: '2-digit',
-                month: 'short',
-                hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'America/Sao_Paulo',
-              })
-              return (
-                <div key={game.id} className="card p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 flex-1 justify-end">
-                      <span className="text-sm font-semibold text-white">
-                        {TEAM_ABBR[game.team1] ?? game.team1}
-                      </span>
-                      <img
-                        src={`/flags/${FLAG_CODES[game.team1] ?? 'xx'}.png`}
-                        alt={game.team1}
-                        className="w-8 h-6 object-cover rounded-sm shrink-0"
-                      />
-                    </div>
+            {/* Game rows — cardzão único por grupo */}
+            {isAllLocked && (
+              <div className="text-center py-2 px-3 rounded-xl bg-copa-menta/10 border border-copa-menta/30 text-copa-teal text-sm font-semibold">
+                🔒 Palpites confirmados — somente visualização
+              </div>
+            )}
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <input
-                        ref={el => { score1Refs.current[game.id] = el }}
-                        type="text"
-                        inputMode="numeric"
-                        value={score1}
-                        onChange={e => handleScoreChange(game.id, 0, e.target.value)}
-                        onFocus={e => e.target.select()}
-                        disabled={isPredictionLocked}
-                        placeholder="–"
-                        className={`w-11 h-11 text-center text-lg font-bold bg-copa-dark border-2 border-copa-border rounded-xl text-white focus:outline-none focus:border-copa-gold transition-colors ${isPredictionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      />
-                      <span className="text-slate-500 font-bold text-base">×</span>
-                      <input
-                        ref={el => { score2Refs.current[game.id] = el }}
-                        type="text"
-                        inputMode="numeric"
-                        value={score2}
-                        onChange={e => handleScoreChange(game.id, 1, e.target.value)}
-                        onFocus={e => e.target.select()}
-                        disabled={isPredictionLocked}
-                        placeholder="–"
-                        className={`w-11 h-11 text-center text-lg font-bold bg-copa-dark border-2 border-copa-border rounded-xl text-white focus:outline-none focus:border-copa-gold transition-colors ${isPredictionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      />
-                    </div>
+            <div className="card overflow-hidden">
+              {activeGroupGames.map((game, index) => {
+                const [score1, score2] = scores[game.id] ?? ['', '']
+                const isSaving = savingGames[game.id] ?? false
+                const matchDate = new Date(game.matchDate)
+                const dateStr = matchDate.toLocaleDateString('pt-BR', {
+                  weekday: 'long',
+                  day: '2-digit',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  timeZone: 'America/Sao_Paulo',
+                })
 
-                    <div className="flex items-center gap-1.5 flex-1">
-                      <img
-                        src={`/flags/${FLAG_CODES[game.team2] ?? 'xx'}.png`}
-                        alt={game.team2}
-                        className="w-8 h-6 object-cover rounded-sm shrink-0"
-                      />
-                      <span className="text-sm font-semibold text-white">
-                        {TEAM_ABBR[game.team2] ?? game.team2}
-                      </span>
-                    </div>
+                return (
+                  <div key={game.id}>
+                    {index > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}
+
+                    {isAllLocked ? (
+                      <div className="p-4">
+                        <div className="flex items-center justify-center gap-3">
+                          <div className="flex items-center gap-1.5 flex-1 justify-end">
+                            <span className="text-sm font-semibold text-copa-dark">
+                              {TEAM_ABBR[game.team1] ?? game.team1}
+                            </span>
+                            <img
+                              src={`/flags/${FLAG_CODES[game.team1] ?? 'xx'}.png`}
+                              alt={game.team1}
+                              className="w-8 h-6 object-cover rounded-sm shrink-0"
+                            />
+                          </div>
+                          <span className="text-xl font-extrabold text-copa-dark tabular-nums shrink-0">
+                            {score1} × {score2}
+                          </span>
+                          <div className="flex items-center gap-1.5 flex-1">
+                            <img
+                              src={`/flags/${FLAG_CODES[game.team2] ?? 'xx'}.png`}
+                              alt={game.team2}
+                              className="w-8 h-6 object-cover rounded-sm shrink-0"
+                            />
+                            <span className="text-sm font-semibold text-copa-dark">
+                              {TEAM_ABBR[game.team2] ?? game.team2}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-600 text-center mt-2">{dateStr}</p>
+                      </div>
+                    ) : (() => {
+                      const isPredictionLocked = lockedPredictions.get(game.id)?.isLocked ?? false
+                      return (
+                        <div className="p-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 flex-1 justify-end">
+                              <span className="text-sm font-semibold text-copa-dark">
+                                {TEAM_ABBR[game.team1] ?? game.team1}
+                              </span>
+                              <img
+                                src={`/flags/${FLAG_CODES[game.team1] ?? 'xx'}.png`}
+                                alt={game.team1}
+                                className="w-8 h-6 object-cover rounded-sm shrink-0"
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <input
+                                ref={el => { score1Refs.current[game.id] = el }}
+                                type="text"
+                                inputMode="numeric"
+                                value={score1}
+                                onChange={e => handleScoreChange(game.id, 0, e.target.value)}
+                                onFocus={e => e.target.select()}
+                                disabled={isPredictionLocked}
+                                placeholder="–"
+                                className="w-11 h-11 text-center text-lg font-bold bg-copa-card border-2 border-copa-border rounded-xl text-copa-dark focus:outline-none focus:border-copa-gold transition-colors"
+                              />
+                              <span className="text-slate-600 font-bold text-base">×</span>
+                              <input
+                                ref={el => { score2Refs.current[game.id] = el }}
+                                type="text"
+                                inputMode="numeric"
+                                value={score2}
+                                onChange={e => handleScoreChange(game.id, 1, e.target.value)}
+                                onFocus={e => e.target.select()}
+                                disabled={isPredictionLocked}
+                                placeholder="–"
+                                className="w-11 h-11 text-center text-lg font-bold bg-copa-card border-2 border-copa-border rounded-xl text-copa-dark focus:outline-none focus:border-copa-gold transition-colors"
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-1.5 flex-1">
+                              <img
+                                src={`/flags/${FLAG_CODES[game.team2] ?? 'xx'}.png`}
+                                alt={game.team2}
+                                className="w-8 h-6 object-cover rounded-sm shrink-0"
+                              />
+                              <span className="text-sm font-semibold text-copa-dark">
+                                {TEAM_ABBR[game.team2] ?? game.team2}
+                              </span>
+                            </div>
+                          </div>
+
+                          <p className="text-xs text-slate-600 text-center mt-2">
+                            {dateStr}
+                            {isSaving && <span className="ml-1 text-copa-teal"> · 💾</span>}
+                          </p>
+                        </div>
+                      )
+                    })()}
                   </div>
+                )
+              })}
+            </div>
 
-                  <p className="text-xs text-slate-500 text-center mt-2">
-                    {dateStr}
-                    {isSaving && <span className="ml-1 text-copa-green"> · 💾</span>}
-                    {isPredictionLocked && <span className="ml-1 text-copa-green"> · 🔒</span>}
-                  </p>
-                </div>
-              )
-            })}
-
-            {allFilled && (
+            {allFilled && !isAllLocked && (
               <button className="btn-primary mt-2" onClick={() => setShowConfirm(true)}>
                 🏆 Confirmar todos os palpites
               </button>

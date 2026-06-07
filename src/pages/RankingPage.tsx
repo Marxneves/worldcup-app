@@ -31,13 +31,13 @@ function GameCard({ game, dateStr, prediction }: GameCardProps) {
       <div className="flex items-center justify-center gap-3">
         <div className="flex items-center gap-1.5">
           <FlagImage team={game.team1} size={22} className="shrink-0" />
-          <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team1] ?? game.team1}</span>
+          <span className="text-sm font-semibold text-copa-dark">{TEAM_ABBR[game.team1] ?? game.team1}</span>
         </div>
-        <span className="text-sm font-bold text-white px-1">
+        <span className="text-sm font-bold text-copa-dark px-1">
           {game.score1 !== null ? `${game.score1} × ${game.score2}` : '-'}
         </span>
         <div className="flex items-center gap-1.5">
-          <span className="text-sm font-semibold text-white">{TEAM_ABBR[game.team2] ?? game.team2}</span>
+          <span className="text-sm font-semibold text-copa-dark">{TEAM_ABBR[game.team2] ?? game.team2}</span>
           <FlagImage team={game.team2} size={22} className="shrink-0" />
         </div>
       </div>
@@ -53,7 +53,7 @@ function GameCard({ game, dateStr, prediction }: GameCardProps) {
         </div>
       )}
       {prediction && game.score1 === null && (
-        <p className="text-xs text-slate-500 text-center mt-2">
+        <p className="text-xs text-slate-600 text-center mt-2">
           Meu palpite: {prediction.score1} × {prediction.score2}
         </p>
       )}
@@ -103,9 +103,9 @@ export default function RankingPage() {
   })
 
   const myPredictions = new Map(predictionsData?.map(p => [p.gameId, p]) ?? [])
-  const isLocked = predictionsData?.some(p => p.isLocked) ?? false
-  const filledCount = predictionsData?.length ?? 0
   const totalGames = gamesData?.length ?? 0
+  const filledCount = predictionsData?.length ?? 0
+  const isAllLocked = filledCount >= totalGames && totalGames > 0 && (predictionsData?.every(p => p.isLocked) ?? false)
 
   const upcomingGames = gamesData?.filter(g => g.score1 === null).slice(0, 5) ?? []
   const finishedGames = gamesData?.filter(g => g.score1 !== null) ?? []
@@ -113,29 +113,29 @@ export default function RankingPage() {
   return (
     <div className="min-h-screen pb-8">
       {/* Header */}
-      <div className="px-5 pt-6 pb-4 bg-copa-dark sticky top-0 z-10 border-b border-copa-border">
+      <div className="px-5 pt-6 pb-4 bg-copa-cream sticky top-0 z-10 border-b border-copa-border">
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h1 className="text-lg font-extrabold text-white">
+            <h1 className="text-lg font-extrabold text-copa-dark">
               {rankingData?.poolName ?? 'Bolão'}
             </h1>
-            <p className="text-slate-400 text-xs">Código: <span className="font-mono text-copa-gold">{poolCode}</span></p>
+            <p className="text-slate-600 text-xs">Código: <span className="font-mono text-copa-gold">{poolCode}</span></p>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(`/predictions/${poolCode}`)}
               className="text-xs bg-copa-gold/10 text-copa-gold border border-copa-gold/30 px-3 py-1.5 rounded-full font-semibold"
             >
-              {isLocked ? '🔒 Palpites' : filledCount === 0 ? '✏️ Preencher' : `✏️ ${filledCount}/${totalGames}`}
+              {isAllLocked ? '🔒 Palpites' : filledCount === 0 ? '✏️ Preencher' : `✏️ ${filledCount}/${totalGames}`}
             </button>
-            <button onClick={logout} className="text-slate-500 text-sm">Sair</button>
+            <button onClick={logout} className="text-slate-600 text-sm">Sair</button>
           </div>
         </div>
 
         <div className="flex gap-2">
           <button
             className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
-              activeTab === 'ranking' ? 'bg-copa-gold text-copa-dark' : 'text-slate-400'
+              activeTab === 'ranking' ? 'bg-copa-gold text-copa-dark' : 'text-slate-600'
             }`}
             onClick={() => setActiveTab('ranking')}
           >
@@ -143,7 +143,7 @@ export default function RankingPage() {
           </button>
           <button
             className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
-              activeTab === 'games' ? 'bg-copa-gold text-copa-dark' : 'text-slate-400'
+              activeTab === 'games' ? 'bg-copa-gold text-copa-dark' : 'text-slate-600'
             }`}
             onClick={() => setActiveTab('games')}
           >
@@ -155,9 +155,24 @@ export default function RankingPage() {
       <div className="px-5 mt-5">
         {activeTab === 'ranking' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            {!isAllLocked && (
+              <div className="card p-6 text-center mb-4">
+                <p className="text-3xl mb-3">🔒</p>
+                <p className="text-copa-dark font-bold mb-1">Ranking bloqueado</p>
+                <p className="text-slate-600 text-sm leading-relaxed">
+                  Finalize seus palpites para ver a classificação dos outros participantes.
+                </p>
+                <button
+                  onClick={() => navigate(`/predictions/${poolCode}`)}
+                  className="mt-4 text-sm bg-copa-gold/10 text-copa-gold border border-copa-gold/30 px-4 py-2 rounded-full font-semibold"
+                >
+                  ✏️ Ir para palpites
+                </button>
+              </div>
+            )}
             {rankingLoading ? (
-              <div className="text-center text-slate-500 py-12">Carregando ranking...</div>
-            ) : (
+              <div className="text-center text-slate-600 py-12">Carregando ranking...</div>
+            ) : !isAllLocked ? null : (
               <div className="space-y-3">
                 {rankingData?.rankings.map((entry, index) => (
                   <motion.div
@@ -170,19 +185,19 @@ export default function RankingPage() {
                     <div className="flex items-center gap-4">
                       <span className="text-2xl w-10 text-center">{getMedalEmoji(index + 1)}</span>
                       <div className="flex-1 min-w-0">
-                        <p className={`font-bold truncate ${entry.userId === user?.id ? 'text-copa-gold' : 'text-white'}`}>
+                        <p className={`font-bold truncate ${entry.userId === user?.id ? 'text-copa-gold' : 'text-copa-dark'}`}>
                           {entry.name} {entry.userId === user?.id ? '(você)' : ''}
                         </p>
-                        <p className="text-xs text-slate-400 mt-0.5">
+                        <p className="text-xs text-slate-600 mt-0.5">
                           {entry.exactScores} placar exato · {entry.correctResults} resultado certo
                           {entry.lockedCount < totalGames && (
-                            <span className="text-slate-500"> · {entry.lockedCount}/{totalGames} palpites</span>
+                            <span className="text-slate-600"> · {entry.lockedCount}/{totalGames} palpites</span>
                           )}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-2xl font-extrabold text-white">{entry.totalPoints}</p>
-                        <p className="text-xs text-slate-500">pts</p>
+                        <p className="text-2xl font-extrabold text-copa-dark">{entry.totalPoints}</p>
+                        <p className="text-xs text-slate-600">pts</p>
                       </div>
                     </div>
                   </motion.div>
@@ -196,7 +211,7 @@ export default function RankingPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             {upcomingGames.length > 0 && (
               <>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Próximos jogos</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">Próximos jogos</h3>
                 <div className="space-y-2 mb-6">
                   {upcomingGames.map(game => {
                     const prediction = myPredictions.get(game.id)
@@ -217,7 +232,7 @@ export default function RankingPage() {
 
             {finishedGames.length > 0 && (
               <>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Resultados</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">Resultados</h3>
                 <div className="space-y-2">
                   {finishedGames.map(game => {
                     const prediction = myPredictions.get(game.id)

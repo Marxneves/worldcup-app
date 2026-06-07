@@ -18,6 +18,7 @@ export function useAuth() {
     localStorage.removeItem('user')
     localStorage.removeItem('activePool')
     setUser(null)
+    window.location.href = '/login'
   }
 
   return { user, login, logout }
