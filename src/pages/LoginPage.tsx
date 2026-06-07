@@ -91,56 +91,52 @@ export default function LoginPage() {
       className="relative overflow-hidden"
       style={{ backgroundColor: '#F5EDD0', height: '100dvh' }}
     >
-      {/* Taça — esticada para ocupar quase toda a tela */}
+      {/* Taça */}
       <div
         className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
         style={{ zIndex: 0 }}
       >
-        <span
+        <img
+          src="/taca.png"
+          alt=""
           style={{
-            fontSize: '90vh',
-            lineHeight: 1,
-            opacity: 0.22,
-            color: '#E5CE75',
+            height: '72vh',
+            width: 'auto',
             userSelect: 'none',
-            display: 'block',
-            transform: 'scaleX(0.78) scaleY(1.08)',
-            transformOrigin: 'center center',
+            objectFit: 'contain',
+            marginTop: '8vh',
           }}
-        >
-          🏆
-        </span>
+        />
       </div>
 
       {/* Bandeira — topo centralizado */}
       <div className="absolute top-7 left-0 right-0 flex justify-center" style={{ zIndex: 10 }}>
-        <img src="/flags/br.png" alt="Brasil" className="w-10 h-auto object-contain" />
+        <img src="/bandeira.png" alt="Brasil" className="w-10 h-auto object-contain" />
       </div>
 
-      {/* BOLÃO + 2026 — centro da tela, sobre a taça */}
+      {/* BOLÃO + 2026 colados na mesma linha */}
       <div
-        className="absolute left-7 right-7"
-        style={{ top: '36%', zIndex: 10 }}
+        className="absolute left-14 right-7"
+        style={{ top: '34%', zIndex: 10 }}
       >
-        <h1
-          className="font-extrabold tracking-widest uppercase leading-none"
-          style={{ color: '#274CA3', fontSize: 'clamp(3rem, 14vw, 4.5rem)' }}
-        >
-          BOLÃO
-        </h1>
-        <div className="flex justify-end">
-          <p
-            className="font-caveat"
-            style={{
-              color: '#00FEA8',
-              fontSize: 'clamp(2.5rem, 12vw, 4rem)',
-              transform: 'rotate(-4deg)',
-              display: 'inline-block',
-              lineHeight: 1,
-            }}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+          <h1
+            className="font-acumin tracking-widest uppercase"
+            style={{ color: '#274CA3', fontSize: 'clamp(3rem, 14vw, 4.5rem)', fontWeight: 900, lineHeight: 1, flex: 'none' }}
           >
-            2026
-          </p>
+            BOLÃO
+          </h1>
+          <img
+            src="/2026.png"
+            alt="2026"
+            style={{
+              height: 'clamp(2.9rem, 14vw, 4.4rem)',
+              width: 'auto',
+              objectFit: 'contain',
+              marginLeft: '-4.4em',
+              marginBottom: '-1.8em',
+            }}
+          />
         </div>
       </div>
 
@@ -149,7 +145,7 @@ export default function LoginPage() {
         className="absolute left-5 right-5 space-y-3"
         animate={
           step === 'phone'
-            ? { top: '60%', bottom: 'auto', y: '-50%' }
+            ? { top: '66%', bottom: 'auto', y: '-50%' }
             : { top: 'auto', bottom: '8%', y: '0%' }
         }
         transition={{ type: 'spring', stiffness: 260, damping: 28 }}
@@ -175,7 +171,7 @@ export default function LoginPage() {
             <button
               onClick={() => { setStep('phone'); setPassword(''); setName(''); setError('') }}
               className="text-sm font-bold px-3 py-1.5 rounded-full"
-              style={{ color: '#274CA3', backgroundColor: '#E5CE7550' }}
+              style={{ color: '#000', backgroundColor: '#E5CE7550' }}
             >
               ← Alterar
             </button>
@@ -218,7 +214,7 @@ export default function LoginPage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="w-full py-4 px-5 rounded-2xl text-base font-semibold outline-none"
+              className="login-input w-full py-4 px-5 rounded-2xl text-base font-semibold outline-none"
               style={{ backgroundColor: '#E5CE75', color: '#000', border: 'none' }}
             />
           )}
@@ -236,7 +232,7 @@ export default function LoginPage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="w-full py-4 px-5 rounded-2xl text-base font-semibold outline-none"
+              className="login-input w-full py-4 px-5 rounded-2xl text-base font-semibold outline-none"
               style={{ backgroundColor: '#E5CE75', color: '#000', border: 'none' }}
             />
           )}

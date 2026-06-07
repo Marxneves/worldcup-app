@@ -20,7 +20,8 @@
   }
 }
 
-.login-phone-input::placeholder {
+.login-phone-input::placeholder,
+.login-input::placeholder {
   color: #F5EDD0;
   opacity: 1;
 }
@@ -37,10 +38,18 @@
   }
 
   .input-field {
-    @apply w-full bg-copa-card border border-copa-border rounded-2xl px-4 py-4
-           text-copa-dark text-base placeholder-slate-500 focus:outline-none
-           focus:border-copa-gold/60 focus:ring-1 focus:ring-copa-gold/30 transition-colors;
+    width: 100%;
+    background-color: #FFFDF5;
+    border: 1px solid #D9CBAD;
+    border-radius: 1rem;
+    padding: 1rem 1.25rem;
+    color: #1a1a1a;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.15s;
   }
+  .input-field::placeholder { color: #9ca3af; }
+  .input-field:focus { border-color: rgba(255, 209, 0, 0.6); }
 
   .score-input {
     @apply w-16 h-16 text-center text-2xl font-bold bg-copa-card border-2 border-copa-border

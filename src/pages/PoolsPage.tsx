@@ -132,7 +132,7 @@ export default function PoolsPage() {
             <h2 className="text-xl font-bold text-copa-dark mb-6">Entrar em um bolão</h2>
             <form onSubmit={handleJoin} className="space-y-4">
               <input
-                className="input-field uppercase text-center text-2xl tracking-widest font-bold"
+                className="input-field uppercase text-center text-2xl tracking-widest font-bold placeholder:text-sm placeholder:tracking-normal placeholder:font-normal placeholder:normal-case"
                 placeholder="Código (ex: ABC123)"
                 value={code}
                 onChange={e => setCode(e.target.value.toUpperCase().slice(0, 6))}

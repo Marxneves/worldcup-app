@@ -107,15 +107,21 @@ export default function RankingPage() {
   const filledCount = predictionsData?.length ?? 0
   const isAllLocked = filledCount >= totalGames && totalGames > 0 && (predictionsData?.every(p => p.isLocked) ?? false)
 
-  const upcomingGames = gamesData?.filter(g => g.score1 === null).slice(0, 5) ?? []
+  const upcomingGames = gamesData?.filter(g => g.score1 === null) ?? []
   const finishedGames = gamesData?.filter(g => g.score1 !== null) ?? []
 
   return (
     <div className="min-h-screen pb-8">
       {/* Header */}
-      <div className="px-5 pt-6 pb-4 bg-copa-cream sticky top-0 z-10 border-b border-copa-border">
+      <div className="px-5 pt-6 pb-4 sticky top-0 z-10 border-b border-copa-border" style={{ backgroundColor: '#F5EDD0' }}>
         <div className="flex justify-between items-center mb-4">
           <div>
+            <button
+              onClick={() => navigate('/pools')}
+              className="text-xs text-slate-600 mb-1 flex items-center gap-1"
+            >
+              ← Meus bolões
+            </button>
             <h1 className="text-lg font-extrabold text-copa-dark">
               {rankingData?.poolName ?? 'Bolão'}
             </h1>
@@ -216,7 +222,7 @@ export default function RankingPage() {
                   {upcomingGames.map(game => {
                     const prediction = myPredictions.get(game.id)
                     const matchDate = new Date(game.matchDate)
-                    const dateStr = matchDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', weekday: 'short' })
+                    const dateStr = matchDate.toLocaleString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
                     return (
                       <GameCard
                         key={game.id}

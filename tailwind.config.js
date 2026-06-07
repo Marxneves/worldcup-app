@@ -19,6 +19,7 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        acumin: ['"Acumin Variable Concept"', '"Arial Narrow"', 'sans-serif'],
         caveat: ['Caveat', 'cursive'],
         cormorant: ['Cormorant Garamond', 'serif'],
       },
