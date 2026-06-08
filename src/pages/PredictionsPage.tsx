@@ -449,14 +449,16 @@ export default function PredictionsPage() {
                   {standings.map((stat, index) => {
                     const goalDifference = stat.goalsFor - stat.goalsAgainst
                     const isTopTwo = index < 2
+                    const isThird = index === 2
                     return (
                       <tr
                         key={stat.team}
-                        className={isTopTwo ? 'text-copa-dark' : 'text-slate-400'}
+                        style={isThird ? { color: '#295A71' } : undefined}
+                        className={isTopTwo ? 'text-copa-dark' : isThird ? '' : 'text-slate-400'}
                       >
                         <td className="py-1.5">
                           <span className={`text-center inline-block w-4 ${
-                            isTopTwo ? 'text-copa-gold font-bold' : ''
+                            isTopTwo ? 'text-copa-gold font-bold' : isThird ? 'font-bold' : ''
                           }`}>
                             {index + 1}
                           </span>
@@ -489,7 +491,7 @@ export default function PredictionsPage() {
                   <span className="text-copa-gold font-bold text-base leading-none">●</span> Classificado direto
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="text-copa-menta font-bold text-base leading-none">●</span> Melhor 3º geral
+                  <span className="font-bold text-base leading-none" style={{ color: '#295A71' }}>●</span> 3º colocado
                 </span>
               </div>
             </div>
