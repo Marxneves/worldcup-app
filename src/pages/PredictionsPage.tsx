@@ -61,29 +61,6 @@ function applyGameResult(
   away.points++
 }
 
-function computeThirdPlaceQualifiers(
-  gamesByGroup: Record<string, Game[]>,
-  scores: Record<string, [string, string]>
-): Set<string> {
-  const thirdPlaceTeams: TeamStats[] = []
-
-  for (const groupGames of Object.values(gamesByGroup)) {
-    if (!groupGames.length) continue
-    const standings = computeGroupStandings(groupGames, scores)
-    if (standings.length >= 3) thirdPlaceTeams.push(standings[2])
-  }
-
-  thirdPlaceTeams.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points
-    const gdA = a.goalsFor - a.goalsAgainst
-    const gdB = b.goalsFor - b.goalsAgainst
-    if (gdB !== gdA) return gdB - gdA
-    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor
-    return b.won - a.won
-  })
-
-  return new Set(thirdPlaceTeams.slice(0, 8).map(t => t.team))
-}
 
 function computeGroupStandings(
   groupGames: Game[],
@@ -357,7 +334,6 @@ export default function PredictionsPage() {
 
   const activeGroupGames = gamesByGroup[activeGroup] ?? []
   const standings = computeGroupStandings(activeGroupGames, scores)
-  const qualifyingThirdPlaceTeams = computeThirdPlaceQualifiers(gamesByGroup, scores)
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -473,21 +449,14 @@ export default function PredictionsPage() {
                   {standings.map((stat, index) => {
                     const goalDifference = stat.goalsFor - stat.goalsAgainst
                     const isTopTwo = index < 2
-                    const isPotentialThirdQualifier = index === 2 && qualifyingThirdPlaceTeams.has(stat.team)
                     return (
                       <tr
                         key={stat.team}
-                        className={
-                          isTopTwo ? 'text-copa-dark' :
-                          isPotentialThirdQualifier ? 'text-copa-menta' :
-                          'text-slate-600'
-                        }
+                        className={isTopTwo ? 'text-copa-dark' : 'text-slate-400'}
                       >
                         <td className="py-1.5">
                           <span className={`text-center inline-block w-4 ${
-                            isTopTwo ? 'text-copa-gold font-bold' :
-                            isPotentialThirdQualifier ? 'text-copa-menta font-bold' :
-                            ''
+                            isTopTwo ? 'text-copa-gold font-bold' : ''
                           }`}>
                             {index + 1}
                           </span>
