@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { RankingEntry, Game, Prediction, Pool } from '../types'
 import FlagImage, { TEAM_ABBR } from '../components/FlagImage'
+import CopyButton from '../components/CopyButton'
 
 function getMedalEmoji(position: number): string {
   if (position === 1) return '🥇'
@@ -66,6 +67,9 @@ export default function RankingPage() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const [activeTab, setActiveTab] = useState<'ranking' | 'games'>('ranking')
+  const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null)
+  const [upcomingExpanded, setUpcomingExpanded] = useState(true)
+  const [resultsExpanded, setResultsExpanded] = useState(true)
 
   const { data: rankingData, isLoading: rankingLoading } = useQuery({
     queryKey: ['ranking', poolCode],
@@ -102,6 +106,17 @@ export default function RankingPage() {
     enabled: !!poolData?.id,
   })
 
+  const { data: viewPredictions, isLoading: viewLoading } = useQuery({
+    queryKey: ['predictions-user', selectedEntry?.userId, poolData?.id],
+    queryFn: async () => {
+      const { data } = await api.get(`/predictions/user/${selectedEntry!.userId}`, {
+        params: { poolId: poolData!.id },
+      })
+      return data.predictions as Prediction[]
+    },
+    enabled: !!selectedEntry && !!poolData?.id,
+  })
+
   const myPredictions = new Map(predictionsData?.map(p => [p.gameId, p]) ?? [])
   const totalGames = gamesData?.length ?? 0
   const filledCount = predictionsData?.length ?? 0
@@ -125,7 +140,11 @@ export default function RankingPage() {
             <h1 className="text-lg font-extrabold text-copa-dark">
               {rankingData?.poolName ?? 'Bolão'}
             </h1>
-            <p className="text-slate-600 text-xs">Código: <span className="font-mono text-copa-gold">{poolCode}</span></p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-slate-600 text-xs">Código:</span>
+              <span className="font-mono text-copa-gold text-xs">{poolCode}</span>
+              <CopyButton text={poolCode ?? ''} />
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -183,7 +202,8 @@ export default function RankingPage() {
                 {rankingData?.rankings.map((entry, index) => (
                   <motion.div
                     key={entry.userId}
-                    className={`card p-4 ${entry.userId === user?.id ? 'border-copa-gold/40' : ''}`}
+                    className={`card p-4 cursor-pointer active:opacity-70 ${entry.userId === user?.id ? 'border-copa-gold/40' : ''}`}
+                    onClick={() => setSelectedEntry(entry)}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
@@ -216,46 +236,160 @@ export default function RankingPage() {
         {activeTab === 'games' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             {upcomingGames.length > 0 && (
-              <>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">Próximos jogos</h3>
-                <div className="space-y-2 mb-6">
-                  {upcomingGames.map(game => {
-                    const prediction = myPredictions.get(game.id)
-                    const matchDate = new Date(game.matchDate)
-                    const dateStr = matchDate.toLocaleString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
-                    return (
-                      <GameCard
-                        key={game.id}
-                        game={game}
-                        dateStr={dateStr}
-                        prediction={prediction}
-                      />
-                    )
-                  })}
-                </div>
-              </>
+              <div className="mb-4">
+                <button
+                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-slate-600 mb-3 py-1"
+                  onClick={() => setUpcomingExpanded(v => !v)}
+                >
+                  <span>Próximos jogos <span className="text-copa-gold">({upcomingGames.length})</span></span>
+                  <span className="text-base leading-none">{upcomingExpanded ? '▾' : '▸'}</span>
+                </button>
+                {upcomingExpanded && (
+                  <div className="space-y-2">
+                    {upcomingGames.map(game => {
+                      const prediction = myPredictions.get(game.id)
+                      const matchDate = new Date(game.matchDate)
+                      const dateStr = matchDate.toLocaleString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
+                      return (
+                        <GameCard
+                          key={game.id}
+                          game={game}
+                          dateStr={dateStr}
+                          prediction={prediction}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )}
 
             {finishedGames.length > 0 && (
-              <>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">Resultados</h3>
-                <div className="space-y-2">
-                  {finishedGames.map(game => {
-                    const prediction = myPredictions.get(game.id)
-                    return (
-                      <GameCard
-                        key={game.id}
-                        game={game}
-                        prediction={prediction}
-                      />
-                    )
-                  })}
-                </div>
-              </>
+              <div>
+                <button
+                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-slate-600 mb-3 py-1"
+                  onClick={() => setResultsExpanded(v => !v)}
+                >
+                  <span>Resultados <span className="text-copa-gold">({finishedGames.length})</span></span>
+                  <span className="text-base leading-none">{resultsExpanded ? '▾' : '▸'}</span>
+                </button>
+                {resultsExpanded && (
+                  <div className="space-y-2">
+                    {finishedGames.map(game => {
+                      const prediction = myPredictions.get(game.id)
+                      return (
+                        <GameCard
+                          key={game.id}
+                          game={game}
+                          prediction={prediction}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )}
           </motion.div>
         )}
       </div>
+
+      <AnimatePresence>
+        {selectedEntry && (
+          <motion.div
+            className="fixed inset-0 z-50 flex flex-col justify-end"
+            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedEntry(null)}
+          >
+            <motion.div
+              className="rounded-t-3xl p-5 pb-10 max-h-[85vh] overflow-y-auto"
+              style={{ backgroundColor: '#F5EDD0' }}
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 300, damping: 35 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <p className="text-lg font-extrabold text-copa-dark">
+                    {selectedEntry.name} {selectedEntry.userId === user?.id ? '(você)' : ''}
+                  </p>
+                  <p className="text-sm text-slate-600">
+                    {selectedEntry.exactScores} placar exato · {selectedEntry.correctResults} resultado certo
+                  </p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="text-right">
+                    <p className="text-2xl font-extrabold text-copa-dark">{selectedEntry.totalPoints}</p>
+                    <p className="text-xs text-slate-600">pts</p>
+                  </div>
+                  <button onClick={() => setSelectedEntry(null)} className="text-slate-600 text-xl leading-none pb-1">✕</button>
+                </div>
+              </div>
+
+              {viewLoading ? (
+                <div className="text-center text-slate-600 py-8">Carregando palpites...</div>
+              ) : viewPredictions ? (
+                <div className="space-y-4">
+                  {(() => {
+                    const byGroup: Record<string, Prediction[]> = {}
+                    for (const pred of viewPredictions) {
+                      const g = pred.game.group
+                      if (!byGroup[g]) byGroup[g] = []
+                      byGroup[g].push(pred)
+                    }
+                    return Object.keys(byGroup).sort().map(group => (
+                      <div key={group}>
+                        <p className="text-xs font-bold uppercase tracking-wider text-copa-gold mb-2">
+                          Grupo {group}
+                        </p>
+                        <div className="card overflow-hidden">
+                          {byGroup[group].map((pred, idx) => {
+                            const pts = pred.game.score1 !== null ? pred.points : null
+                            const ptsBg = pts === 3 ? 'rgba(0,254,168,0.15)' : pts === 1 ? 'rgba(255,209,0,0.15)' : 'rgba(230,57,70,0.1)'
+                            const ptsColor = pts === 3 ? '#00FEA8' : pts === 1 ? '#FFD100' : '#e63946'
+                            return (
+                              <div key={pred.id}>
+                                {idx > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}
+                                <div className="p-3 relative">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <span className="font-semibold text-copa-dark text-right flex-1">
+                                      {TEAM_ABBR[pred.game.team1] ?? pred.game.team1}
+                                    </span>
+                                    <span className="font-extrabold text-copa-dark shrink-0 tabular-nums">
+                                      {pred.score1} × {pred.score2}
+                                    </span>
+                                    <span className="font-semibold text-copa-dark flex-1">
+                                      {TEAM_ABBR[pred.game.team2] ?? pred.game.team2}
+                                    </span>
+                                  </div>
+                                  {pts !== null && pts !== undefined && (
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: ptsBg, color: ptsColor }}>
+                                      +{pts}pts
+                                    </span>
+                                  )}
+                                  {pred.game.score1 !== null && (
+                                    <p className="text-xs text-center mt-1" style={{ color: '#295A71' }}>
+                                      Resultado: {pred.game.score1} × {pred.game.score2}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  })()}
+                </div>
+              ) : null}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

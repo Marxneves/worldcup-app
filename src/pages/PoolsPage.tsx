@@ -1,10 +1,92 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { Pool } from '../types'
+
+const TRASH_WIDTH = 72
+
+interface PoolCardProps {
+  pool: Pool
+  onLeave: (code: string) => void
+  onNavigate: (code: string) => void
+  isLeaving: boolean
+}
+
+function PoolCard({ pool, onLeave, onNavigate, isLeaving }: PoolCardProps) {
+  const [swiped, setSwiped] = useState(false)
+  const touchStartX = useRef(0)
+
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    const delta = e.changedTouches[0].clientX - touchStartX.current
+    if (delta < -50) setSwiped(true)
+    else if (delta > 30) setSwiped(false)
+  }
+
+  function handleClick() {
+    if (swiped) { setSwiped(false); return }
+    onNavigate(pool.code)
+  }
+
+  return (
+    <div style={{ overflow: 'hidden' }}>
+      {/* Card + lixeira num mesmo flex que desliza junto — a lixeira fica fora da área visível até o swipe */}
+      <motion.div
+        style={{ display: 'flex', width: `calc(100% + ${TRASH_WIDTH}px)` }}
+        animate={{ x: swiped ? -TRASH_WIDTH : 0 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 40, mass: 0.8 }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Card */}
+        <div
+          className="card p-4 flex items-center gap-3 cursor-pointer"
+          style={{ flex: 1, minWidth: 0, borderRadius: '1rem' }}
+          onClick={handleClick}
+        >
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-copa-dark">{pool.name}</p>
+            <p className="text-slate-600 text-sm mt-0.5">
+              {pool.memberCount} participante{(pool.memberCount ?? 0) > 1 ? 's' : ''}
+            </p>
+          </div>
+          <span className="text-slate-600 text-xl shrink-0">›</span>
+        </div>
+
+        {/* Lixeira — sempre à direita do card, invisível até o swipe */}
+        <div
+            style={{
+              width: TRASH_WIDTH,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#F5EDD0',
+            }}
+          >
+            <button
+              onClick={() => onLeave(pool.code)}
+              disabled={isLeaving}
+              style={{ padding: '0.75rem', display: 'flex' }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            </button>
+          </div>
+      </motion.div>
+    </div>
+  )
+}
 
 export default function PoolsPage() {
   const navigate = useNavigate()
@@ -15,6 +97,12 @@ export default function PoolsPage() {
   const [poolName, setPoolName] = useState('')
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    ;(document.activeElement as HTMLElement)?.blur()
+    const timer = setTimeout(() => window.scrollTo({ top: 0, behavior: 'instant' }), 100)
+    return () => clearTimeout(timer)
+  }, [mode])
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-pools'],
@@ -33,6 +121,17 @@ export default function PoolsPage() {
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
       setError(msg || 'Bolão não encontrado')
+    },
+  })
+
+  const leaveMutation = useMutation({
+    mutationFn: (poolCode: string) => api.delete(`/pools/${poolCode}/leave`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-pools'] })
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setError(msg || 'Erro ao sair do bolão')
     },
   })
 
@@ -71,6 +170,10 @@ export default function PoolsPage() {
         <button onClick={logout} className="text-slate-600 text-sm">Sair</button>
       </div>
 
+      {error && (
+        <p className="text-copa-red text-sm text-center mb-4">{error}</p>
+      )}
+
       <AnimatePresence mode="wait">
         {mode === 'list' && (
           <motion.div
@@ -85,20 +188,13 @@ export default function PoolsPage() {
             ) : data && data.length > 0 ? (
               <div className="space-y-3 mb-6">
                 {data.map(pool => (
-                  <div
+                  <PoolCard
                     key={pool.id}
-                    className="card p-4 flex justify-between items-center cursor-pointer active:scale-95 transition-transform"
-                    onClick={() => navigate(`/ranking/${pool.code}`)}
-                  >
-                    <div>
-                      <p className="font-bold text-copa-dark">{pool.name}</p>
-                      <p className="text-slate-600 text-sm">
-                        Código: <span className="text-copa-gold font-mono font-bold">{pool.code}</span>
-                        {' · '}{pool.memberCount} participante{(pool.memberCount ?? 0) > 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    <span className="text-slate-600 text-xl">›</span>
-                  </div>
+                    pool={pool}
+                    onLeave={poolCode => leaveMutation.mutate(poolCode)}
+                    onNavigate={poolCode => navigate(`/ranking/${poolCode}`)}
+                    isLeaving={leaveMutation.isPending}
+                  />
                 ))}
               </div>
             ) : (
@@ -126,7 +222,7 @@ export default function PoolsPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -30 }}
           >
-            <button onClick={() => setMode('list')} className="text-slate-600 mb-6 flex items-center gap-2">
+            <button onClick={() => { setMode('list') }} className="text-slate-600 mb-6 flex items-center gap-2">
               ← Voltar
             </button>
             <h2 className="text-xl font-bold text-copa-dark mb-6">Entrar em um bolão</h2>
@@ -154,7 +250,7 @@ export default function PoolsPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -30 }}
           >
-            <button onClick={() => setMode('list')} className="text-slate-600 mb-6 flex items-center gap-2">
+            <button onClick={() => { setMode('list') }} className="text-slate-600 mb-6 flex items-center gap-2">
               ← Voltar
             </button>
             <h2 className="text-xl font-bold text-copa-dark mb-6">Criar novo bolão</h2>

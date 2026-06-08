@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 import { Game, Prediction, Pool } from '../types'
 import { FLAG_CODES, TEAM_ABBR } from '../components/FlagImage'
@@ -116,6 +116,17 @@ function computeGroupStandings(
     })
 }
 
+function PtsTag({ points }: { points?: number | null }) {
+  if (points === null || points === undefined) return null
+  const bg = points === 3 ? 'rgba(0,254,168,0.15)' : points === 1 ? 'rgba(255,209,0,0.15)' : 'rgba(230,57,70,0.1)'
+  const color = points === 3 ? '#00FEA8' : points === 1 ? '#FFD100' : '#e63946'
+  return (
+    <span className="text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: bg, color }}>
+      +{points}pts
+    </span>
+  )
+}
+
 export default function PredictionsPage() {
   const { poolCode } = useParams<{ poolCode: string }>()
   const navigate = useNavigate()
@@ -127,6 +138,8 @@ export default function PredictionsPage() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [lockError, setLockError] = useState('')
   const [locking, setLocking] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const queryClient = useQueryClient()
 
   const score1Refs = useRef<Record<string, HTMLInputElement | null>>({})
   const score2Refs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -165,6 +178,15 @@ export default function PredictionsPage() {
       return data.predictions as Prediction[]
     },
     enabled: !!pool?.id,
+  })
+
+  const { data: templatePredictions } = useQuery({
+    queryKey: ['predictions-template', pool?.id],
+    queryFn: async () => {
+      const { data } = await api.get('/predictions/template', { params: { excludePoolId: pool!.id } })
+      return data.predictions as Prediction[]
+    },
+    enabled: !!pool?.id && savedPredictions !== undefined && savedPredictions.length === 0,
   })
 
   useEffect(() => {
@@ -228,6 +250,27 @@ export default function PredictionsPage() {
       score2Refs.current[gameId]?.select()
     }
 
+    if (team === 1 && digits.length >= 1 && games) {
+      const groupGames = games
+        .filter(g => g.group === activeGroup)
+        .sort((a, b) => a.number - b.number)
+      const currentIdx = groupGames.findIndex(g => g.id === gameId)
+      const nextGame = groupGames[currentIdx + 1]
+      if (nextGame) {
+        setTimeout(() => {
+          const el = score1Refs.current[nextGame.id]
+          if (el) {
+            el.focus()
+            el.select()
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        }, 50)
+      } else {
+        score2Refs.current[gameId]?.blur()
+        setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 150)
+      }
+    }
+
     const newScore1 = team === 0 ? digits : prev[0]
     const newScore2 = team === 1 ? digits : prev[1]
     if (newScore1 !== '' && newScore2 !== '') {
@@ -254,6 +297,23 @@ export default function PredictionsPage() {
     return <div className="flex items-center justify-center min-h-screen text-slate-600">Carregando...</div>
   }
 
+  async function handleImportTemplate() {
+    if (!templatePredictions?.length || !pool) return
+    setImporting(true)
+    const newScores: Record<string, [string, string]> = {}
+    for (const pred of templatePredictions) {
+      newScores[pred.gameId] = [String(pred.score1), String(pred.score2)]
+    }
+    setScores(newScores)
+    await Promise.all(
+      templatePredictions.map(pred =>
+        api.post('/predictions/save', { poolId: pool.id, gameId: pred.gameId, score1: pred.score1, score2: pred.score2 }).catch(() => {})
+      )
+    )
+    await queryClient.invalidateQueries({ queryKey: ['predictions', poolCode] })
+    setImporting(false)
+  }
+
   const gamesByGroup: Record<string, Game[]> = {}
   for (const groupLetter of GROUPS) gamesByGroup[groupLetter] = []
   for (const game of games) gamesByGroup[game.group]?.push(game)
@@ -274,7 +334,6 @@ export default function PredictionsPage() {
         animate={{ opacity: 1, scale: 1 }}
       >
         <div className="text-center mb-8">
-          <div className="text-6xl mb-4">🔒</div>
           <h2 className="text-2xl font-extrabold text-copa-dark">Confirmar palpites?</h2>
           <p className="text-slate-600 mt-3 leading-relaxed text-sm">
             Você preencheu <span className="text-copa-gold font-bold">{filledCount} de {games.length}</span> jogos.
@@ -286,7 +345,7 @@ export default function PredictionsPage() {
         {lockError && <p className="text-copa-red text-sm text-center mb-4">{lockError}</p>}
         <div className="space-y-3">
           <button className="btn-primary" onClick={handleLockAll} disabled={locking}>
-            {locking ? 'Confirmando...' : '✅ Confirmar e travar palpites'}
+            {locking ? 'Confirmando...' : 'Confirmar e travar palpites'}
           </button>
           <button className="btn-secondary" onClick={() => setShowConfirm(false)}>
             Voltar e revisar
@@ -338,13 +397,12 @@ export default function PredictionsPage() {
                 key={groupLetter}
                 ref={el => { tabButtonRefs.current[groupLetter] = el }}
                 onClick={() => navigateToGroup(groupLetter)}
-                className={`shrink-0 h-8 w-8 rounded-lg text-sm font-bold transition-all ${
-                  activeGroup === groupLetter
-                    ? 'bg-copa-gold text-copa-dark'
-                    : isGroupComplete
-                    ? 'bg-copa-green/20 border border-copa-green/40 text-copa-green'
-                    : 'bg-copa-border text-slate-600'
-                }`}
+                className="shrink-0 h-8 w-8 rounded-lg text-sm font-bold transition-all"
+                style={{
+                  backgroundColor: activeGroup === groupLetter ? '#FFD100' : isGroupComplete ? 'rgba(0,254,168,0.15)' : '#F5EDD0',
+                  color: '#1a1a1a',
+                  border: isGroupComplete && activeGroup !== groupLetter ? '1px solid rgba(0,254,168,0.4)' : '1px solid transparent',
+                }}
               >
                 {groupLetter}
               </button>
@@ -352,6 +410,28 @@ export default function PredictionsPage() {
           })}
         </div>
       </div>
+
+      {/* Banner de reutilização de palpites */}
+      {!isAllLocked && filledCount === 0 && templatePredictions && templatePredictions.length > 0 && (
+        <motion.div
+          className="mx-5 mt-4 card p-4 flex items-center gap-3"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-copa-dark text-sm">Reutilizar palpites?</p>
+            <p className="text-slate-600 text-xs mt-0.5">Você tem palpites de outro bolão. Use como ponto de partida e edite o que quiser.</p>
+          </div>
+          <button
+            onClick={handleImportTemplate}
+            disabled={importing}
+            className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-opacity"
+            style={{ backgroundColor: '#FFD100', color: '#1a1a1a', opacity: importing ? 0.6 : 1 }}
+          >
+            {importing ? '...' : 'Importar'}
+          </button>
+        </motion.div>
+      )}
 
       {/* Carousel — clips horizontal overflow while allowing vertical page scroll */}
       <div
@@ -498,6 +578,14 @@ export default function PredictionsPage() {
                           </div>
                         </div>
                         <p className="text-xs text-slate-600 text-center mt-2">{dateStr}</p>
+                        {game.score1 !== null && (
+                          <div className="flex items-center justify-center gap-2 mt-1.5">
+                            <span className="text-xs font-medium" style={{ color: '#295A71' }}>
+                              Resultado: {game.score1} × {game.score2}
+                            </span>
+                            <PtsTag points={lockedPredictions.get(game.id)?.points} />
+                          </div>
+                        )}
                       </div>
                     ) : (() => {
                       const isPredictionLocked = lockedPredictions.get(game.id)?.isLocked ?? false
@@ -525,7 +613,7 @@ export default function PredictionsPage() {
                                 onFocus={e => e.target.select()}
                                 disabled={isPredictionLocked}
                                 placeholder="–"
-                                className="w-11 h-11 text-center text-lg font-bold bg-copa-card border-2 border-copa-border rounded-xl text-copa-dark focus:outline-none focus:border-copa-gold transition-colors"
+                                className="score-input w-11 h-11 text-center text-lg font-bold rounded-xl"
                               />
                               <span className="text-slate-600 font-bold text-base">×</span>
                               <input
@@ -537,7 +625,7 @@ export default function PredictionsPage() {
                                 onFocus={e => e.target.select()}
                                 disabled={isPredictionLocked}
                                 placeholder="–"
-                                className="w-11 h-11 text-center text-lg font-bold bg-copa-card border-2 border-copa-border rounded-xl text-copa-dark focus:outline-none focus:border-copa-gold transition-colors"
+                                className="score-input w-11 h-11 text-center text-lg font-bold rounded-xl"
                               />
                             </div>
 
@@ -555,7 +643,6 @@ export default function PredictionsPage() {
 
                           <p className="text-xs text-slate-600 text-center mt-2">
                             {dateStr}
-                            {isSaving && <span className="ml-1 text-copa-teal"> · 💾</span>}
                           </p>
                         </div>
                       )
@@ -566,7 +653,10 @@ export default function PredictionsPage() {
             </div>
 
             {allFilled && !isAllLocked && (
-              <button className="btn-primary mt-2" onClick={() => setShowConfirm(true)}>
+              <button
+                className="btn-primary mt-2"
+                onClick={() => { setShowConfirm(true); window.scrollTo({ top: 0, behavior: 'instant' }) }}
+              >
                 🏆 Confirmar todos os palpites
               </button>
             )}

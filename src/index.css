@@ -52,12 +52,15 @@
   .input-field:focus { border-color: rgba(255, 209, 0, 0.6); }
 
   .score-input {
-    @apply w-16 h-16 text-center text-2xl font-bold bg-copa-card border-2 border-copa-border
-           rounded-2xl text-copa-dark focus:outline-none focus:border-copa-gold transition-colors;
+    background-color: #FFFDF5;
+    border: 2px solid #D9CBAD;
+    color: #1a1a1a;
+    outline: none;
+    transition: border-color 0.15s;
   }
 
-  .score-input:focus::placeholder {
-    color: transparent;
+  .score-input:focus {
+    border-color: #FFD100;
   }
 
   .card {
