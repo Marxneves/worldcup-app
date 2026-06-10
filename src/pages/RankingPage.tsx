@@ -181,53 +181,65 @@ export default function RankingPage() {
         {activeTab === 'ranking' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             {!isAllLocked && (
-              <div className="card p-6 text-center mb-4">
-                <p className="text-3xl mb-3">🔒</p>
-                <p className="text-copa-dark font-bold mb-1">Ranking bloqueado</p>
-                <p className="text-slate-600 text-sm leading-relaxed">
-                  Finalize seus palpites para ver a classificação dos outros participantes.
-                </p>
-                <button
-                  onClick={() => navigate(`/predictions/${poolCode}`)}
-                  className="mt-4 text-sm bg-copa-gold/10 text-copa-gold border border-copa-gold/30 px-4 py-2 rounded-full font-semibold"
-                >
-                  ✏️ Ir para palpites
-                </button>
+              <div className="card p-4 flex items-start gap-3 mb-4">
+                <span className="text-xl shrink-0">🔒</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-copa-dark font-bold text-sm">Confirme seus palpites</p>
+                  <p className="text-slate-600 text-xs mt-0.5 leading-relaxed">
+                    Para ver os palpites dos outros participantes, finalize os seus primeiro.
+                  </p>
+                  <button
+                    onClick={() => navigate(`/predictions/${poolCode}`)}
+                    className="mt-2 text-xs bg-copa-gold/10 text-copa-gold border border-copa-gold/30 px-3 py-1.5 rounded-full font-semibold"
+                  >
+                    ✏️ Ir para palpites
+                  </button>
+                </div>
               </div>
             )}
             {rankingLoading ? (
               <div className="text-center text-slate-600 py-12">Carregando ranking...</div>
-            ) : !isAllLocked ? null : (
+            ) : (
               <div className="space-y-3">
-                {rankingData?.rankings.map((entry, index) => (
-                  <motion.div
-                    key={entry.userId}
-                    className={`card p-4 cursor-pointer active:opacity-70 ${entry.userId === user?.id ? 'border-copa-gold/40' : ''}`}
-                    onClick={() => setSelectedEntry(entry)}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <div className="flex items-center gap-4">
-                      <span className="text-2xl w-10 text-center">{getMedalEmoji(index + 1)}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-bold truncate ${entry.userId === user?.id ? 'text-copa-gold' : 'text-copa-dark'}`}>
-                          {entry.name} {entry.userId === user?.id ? '(você)' : ''}
-                        </p>
-                        <p className="text-xs text-slate-600 mt-0.5">
-                          {entry.exactScores} placar exato · {entry.correctResults} resultado certo
-                          {entry.lockedCount < totalGames && (
-                            <span className="text-slate-600"> · {entry.lockedCount}/{totalGames} palpites</span>
+                {rankingData?.rankings.map((entry, index) => {
+                  const hasFilledPredictions = entry.lockedCount > 0
+                  const canViewPredictions = isAllLocked && hasFilledPredictions
+                  return (
+                    <motion.div
+                      key={entry.userId}
+                      className={`card p-4 ${canViewPredictions ? 'cursor-pointer active:opacity-70' : 'cursor-default'} ${entry.userId === user?.id ? 'border-copa-gold/40' : ''}`}
+                      onClick={() => { if (canViewPredictions) setSelectedEntry(entry) }}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <span className="text-2xl w-10 text-center">{getMedalEmoji(index + 1)}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-bold truncate ${entry.userId === user?.id ? 'text-copa-gold' : 'text-copa-dark'}`}>
+                            {entry.name} {entry.userId === user?.id ? '(você)' : ''}
+                          </p>
+                          {hasFilledPredictions ? (
+                            <p className="text-xs text-slate-600 mt-0.5">
+                              {entry.exactScores} placar exato · {entry.correctResults} resultado certo
+                              {entry.lockedCount < totalGames && (
+                                <span className="text-slate-600"> · {entry.lockedCount}/{totalGames} palpites</span>
+                              )}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-slate-400 mt-0.5 italic">Palpites ainda não preenchidos</p>
                           )}
-                        </p>
+                        </div>
+                        {hasFilledPredictions && (
+                          <div className="text-right">
+                            <p className="text-2xl font-extrabold text-copa-dark">{entry.totalPoints}</p>
+                            <p className="text-xs text-slate-600">pts</p>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-extrabold text-copa-dark">{entry.totalPoints}</p>
-                        <p className="text-xs text-slate-600">pts</p>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  )
+                })}
               </div>
             )}
           </motion.div>
