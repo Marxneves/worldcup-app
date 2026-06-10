@@ -458,13 +458,13 @@ export default function PredictionsPage() {
                 <thead>
                   <tr className="text-slate-600 border-b border-copa-border">
                     <th className="text-left pb-1.5 font-medium w-5">#</th>
-                    <th className="text-left pb-1.5 font-medium">Seleção</th>
-                    <th className="text-center pb-1.5 font-medium w-6">J</th>
-                    <th className="text-center pb-1.5 font-medium w-6">V</th>
-                    <th className="text-center pb-1.5 font-medium w-6">E</th>
-                    <th className="text-center pb-1.5 font-medium w-6">D</th>
-                    <th className="text-center pb-1.5 font-medium w-8">SG</th>
-                    <th className="text-center pb-1.5 font-bold text-copa-dark w-8">Pts</th>
+                    <th className="text-left pb-1.5 font-medium max-w-0 w-full">Seleção</th>
+                    <th className="text-center pb-1.5 font-medium w-8 px-1">J</th>
+                    <th className="text-center pb-1.5 font-medium w-8 px-1">V</th>
+                    <th className="text-center pb-1.5 font-medium w-8 px-1">E</th>
+                    <th className="text-center pb-1.5 font-medium w-8 px-1">D</th>
+                    <th className="text-center pb-1.5 font-medium w-10 px-1">SG</th>
+                    <th className="text-center pb-1.5 font-bold text-copa-dark w-10 px-1">Pts</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -485,24 +485,24 @@ export default function PredictionsPage() {
                             {index + 1}
                           </span>
                         </td>
-                        <td className="py-1.5">
-                          <div className="flex items-center gap-1.5">
+                        <td className="py-1.5 max-w-0 w-full">
+                          <div className="flex items-center gap-1.5 min-w-0">
                             <img
                               src={`/flags/${FLAG_CODES[stat.team] ?? 'xx'}.png`}
                               alt={stat.team}
                               className="w-5 h-3.5 object-cover rounded-sm shrink-0"
                             />
-                            <span>{TEAM_ABBR[stat.team] ?? stat.team}</span>
+                            <span className="truncate">{stat.team}</span>
                           </div>
                         </td>
-                        <td className="text-center py-1.5">{stat.played}</td>
-                        <td className="text-center py-1.5">{stat.won}</td>
-                        <td className="text-center py-1.5">{stat.drawn}</td>
-                        <td className="text-center py-1.5">{stat.lost}</td>
-                        <td className="text-center py-1.5">
+                        <td className="text-center py-1.5 px-1">{stat.played}</td>
+                        <td className="text-center py-1.5 px-1">{stat.won}</td>
+                        <td className="text-center py-1.5 px-1">{stat.drawn}</td>
+                        <td className="text-center py-1.5 px-1">{stat.lost}</td>
+                        <td className="text-center py-1.5 px-1">
                           {goalDifference > 0 ? `+${goalDifference}` : goalDifference}
                         </td>
-                        <td className="text-center py-1.5 font-bold">{stat.points}</td>
+                        <td className="text-center py-1.5 px-1 font-bold">{stat.points}</td>
                       </tr>
                     )
                   })}
