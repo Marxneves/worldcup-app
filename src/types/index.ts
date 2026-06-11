@@ -42,3 +42,39 @@ export interface RankingEntry {
   correctResults: number
   lockedCount: number
 }
+
+export interface DailySummaryPrediction {
+  userId: string
+  name: string
+  score1: number | null
+  score2: number | null
+  points: number
+}
+
+export interface DailySummaryGame {
+  number: number
+  team1: string
+  team2: string
+  score1: number
+  score2: number
+  matchDate: string
+  predictions: DailySummaryPrediction[]
+}
+
+export interface DailySummaryRankingEntry {
+  position: number
+  previousPosition: number
+  movement: number
+  userId: string
+  name: string
+  totalPoints: number
+  todayPoints: number
+  exactScores: number
+}
+
+export interface DailySummary {
+  date: string
+  poolName: string
+  games: DailySummaryGame[]
+  ranking: DailySummaryRankingEntry[]
+}

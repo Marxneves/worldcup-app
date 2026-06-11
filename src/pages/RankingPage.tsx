@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import html2canvas from 'html2canvas'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
-import { RankingEntry, Game, Prediction, Pool } from '../types'
+import { RankingEntry, Game, Prediction, Pool, DailySummary } from '../types'
 import FlagImage, { TEAM_ABBR } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
 
@@ -136,12 +137,50 @@ export default function RankingPage() {
   const { poolCode } = useParams<{ poolCode: string }>()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const [activeTab, setActiveTab] = useState<'ranking' | 'games'>('ranking')
+  const [activeTab, setActiveTab] = useState<'ranking' | 'games' | 'summary'>('ranking')
   const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null)
   const [upcomingExpanded, setUpcomingExpanded] = useState(true)
   const [resultsExpanded, setResultsExpanded] = useState(true)
+  const [summaryDate, setSummaryDate] = useState(() =>
+    new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  )
+  const [sharing, setSharing] = useState(false)
+  const summaryRef = useRef<HTMLDivElement>(null)
 
   const queryClient = useQueryClient()
+
+  const { data: summaryData, isLoading: summaryLoading } = useQuery({
+    queryKey: ['daily-summary', poolCode, summaryDate],
+    queryFn: async () => {
+      const { data } = await api.get(`/pools/${poolCode}/daily-summary`, { params: { date: summaryDate } })
+      return data as DailySummary
+    },
+    enabled: activeTab === 'summary' && !!poolCode,
+  })
+
+  async function handleShare() {
+    if (!summaryRef.current) return
+    setSharing(true)
+    try {
+      const canvas = await html2canvas(summaryRef.current, {
+        backgroundColor: '#F5EDD0',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      })
+      canvas.toBlob(blob => {
+        if (!blob) return
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `resumo-${summaryDate}.png`
+        link.click()
+        URL.revokeObjectURL(url)
+      }, 'image/png')
+    } finally {
+      setSharing(false)
+    }
+  }
 
   async function handleSaveResult(gameNumber: number, score1: number, score2: number) {
     await api.post('/admin/results', { gameNumber, score1, score2 })
@@ -252,6 +291,16 @@ export default function RankingPage() {
           >
             📅 Jogos
           </button>
+          {user?.isAdmin && (
+            <button
+              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                activeTab === 'summary' ? 'bg-copa-gold text-copa-dark' : 'text-slate-600'
+              }`}
+              onClick={() => setActiveTab('summary')}
+            >
+              📊 Resumo
+            </button>
+          )}
         </div>
       </div>
 
@@ -318,6 +367,163 @@ export default function RankingPage() {
                     </motion.div>
                   )
                 })}
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {activeTab === 'summary' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="flex items-center justify-between mb-4">
+              <input
+                type="date"
+                value={summaryDate}
+                max={new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+                onChange={e => setSummaryDate(e.target.value)}
+                className="text-sm border border-copa-border rounded-lg px-3 py-1.5 bg-white text-copa-dark"
+              />
+              <button
+                onClick={handleShare}
+                disabled={sharing || summaryLoading || !summaryData}
+                className="flex items-center gap-1.5 bg-copa-teal text-white text-sm font-semibold px-4 py-1.5 rounded-xl disabled:opacity-50"
+              >
+                {sharing ? '⏳' : '📤'} Compartilhar
+              </button>
+            </div>
+
+            {summaryLoading && (
+              <div className="text-center text-slate-600 py-12">Carregando resumo...</div>
+            )}
+
+            {!summaryLoading && summaryData && (
+              <div ref={summaryRef} className="space-y-4" style={{ backgroundColor: '#F5EDD0' }}>
+                {summaryData.games.length === 0 && (
+                  <div className="card p-6 text-center text-slate-600 text-sm">
+                    Nenhum jogo com resultado nessa data.
+                  </div>
+                )}
+
+                {summaryData.games.map(game => (
+                  <div key={game.number} className="card overflow-hidden">
+                    <div className="px-4 py-3 border-b border-copa-border">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                          Jogo {game.number}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {new Date(game.matchDate).toLocaleString('pt-BR', {
+                            day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                            timeZone: 'America/Sao_Paulo',
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-center gap-3 mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <FlagImage team={game.team1} size={20} />
+                          <span className="font-bold text-copa-dark text-sm">{TEAM_ABBR[game.team1] ?? game.team1}</span>
+                        </div>
+                        <span className="text-xl font-extrabold text-copa-dark tabular-nums">
+                          {game.score1} × {game.score2}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-copa-dark text-sm">{TEAM_ABBR[game.team2] ?? game.team2}</span>
+                          <FlagImage team={game.team2} size={20} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="divide-y divide-copa-border">
+                      {game.predictions.map(pred => {
+                        const bgColor = pred.points === 3
+                          ? 'rgba(0,254,168,0.12)'
+                          : pred.points === 1
+                          ? 'rgba(255,209,0,0.12)'
+                          : 'transparent'
+                        const badgeColor = pred.points === 3
+                          ? { bg: 'rgba(0,254,168,0.2)', text: '#295A71' }
+                          : pred.points === 1
+                          ? { bg: 'rgba(255,209,0,0.2)', text: '#B8960A' }
+                          : { bg: 'rgba(230,57,70,0.1)', text: '#e63946' }
+
+                        return (
+                          <div key={pred.userId} className="flex items-center px-4 py-2.5" style={{ backgroundColor: bgColor }}>
+                            <span className="flex-1 text-sm font-semibold text-copa-dark truncate">{pred.name}</span>
+                            {pred.score1 !== null ? (
+                              <span className="text-sm tabular-nums text-slate-600 mx-3">
+                                {pred.score1} × {pred.score2}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400 mx-3 italic">sem palpite</span>
+                            )}
+                            <span
+                              className="text-xs font-bold px-2 py-0.5 rounded-full shrink-0"
+                              style={{ backgroundColor: badgeColor.bg, color: badgeColor.text }}
+                            >
+                              {pred.points === 3 ? '+3 pts' : pred.points === 1 ? '+1 pt' : '0 pts'}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                {summaryData.games.length > 0 && (
+                  <div className="card overflow-hidden">
+                    <div className="px-4 py-3 border-b border-copa-border">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Ranking geral</p>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-copa-border">
+                          <th className="text-left px-4 py-2 text-xs text-slate-500 font-semibold w-10">#</th>
+                          <th className="text-left px-2 py-2 text-xs text-slate-500 font-semibold">Participante</th>
+                          <th className="text-center px-2 py-2 text-xs text-slate-500 font-semibold w-14">Hoje</th>
+                          <th className="text-center px-2 py-2 text-xs text-slate-500 font-semibold w-14">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-copa-border">
+                        {summaryData.ranking.map(entry => {
+                          const moved = entry.movement
+                          const movementIcon = moved > 0 ? '▲' : moved < 0 ? '▼' : '—'
+                          const movementColor = moved > 0 ? '#22c55e' : moved < 0 ? '#e63946' : '#94a3b8'
+
+                          return (
+                            <tr key={entry.userId} className={entry.userId === user?.id ? 'bg-copa-gold/5' : ''}>
+                              <td className="px-4 py-2.5">
+                                <div className="flex items-center gap-1">
+                                  <span className="font-extrabold text-copa-dark tabular-nums">{entry.position}º</span>
+                                  <span className="text-xs font-bold tabular-nums" style={{ color: movementColor }}>
+                                    {movementIcon}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-2 py-2.5">
+                                <span className={`font-semibold truncate block max-w-[120px] ${entry.userId === user?.id ? 'text-copa-gold' : 'text-copa-dark'}`}>
+                                  {entry.name}
+                                </span>
+                                {Math.abs(moved) > 0 && (
+                                  <span className="text-xs" style={{ color: movementColor }}>
+                                    {moved > 0 ? `+${moved}` : moved} posição
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-2 py-2.5 text-center">
+                                <span className="font-bold text-copa-teal tabular-nums">
+                                  {entry.todayPoints > 0 ? `+${entry.todayPoints}` : '—'}
+                                </span>
+                              </td>
+                              <td className="px-2 py-2.5 text-center">
+                                <span className="font-extrabold text-copa-dark tabular-nums">{entry.totalPoints}</span>
+                                <span className="text-xs text-slate-500 ml-0.5">pts</span>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>
