@@ -9,12 +9,6 @@ import { RankingEntry, Game, Prediction, Pool, DailySummary } from '../types'
 import FlagImage, { TEAM_ABBR, FLAG_CODES } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
 
-function getMedalEmoji(position: number): string {
-  if (position === 1) return '🥇'
-  if (position === 2) return '🥈'
-  if (position === 3) return '🥉'
-  return `${position}º`
-}
 
 interface GameCardProps {
   game: Game
@@ -328,46 +322,51 @@ export default function RankingPage() {
             {rankingLoading ? (
               <div className="text-center text-slate-600 py-12">Carregando ranking...</div>
             ) : (
-              <div className="space-y-3">
-                {rankingData?.rankings.map((entry, index) => {
-                  const hasFilledPredictions = entry.lockedCount > 0
-                  const canViewPredictions = isAllLocked && hasFilledPredictions
-                  return (
-                    <motion.div
-                      key={entry.userId}
-                      className={`card p-4 ${canViewPredictions ? 'cursor-pointer active:opacity-70' : 'cursor-default'} ${entry.userId === user?.id ? 'border-copa-gold/40' : ''}`}
-                      onClick={() => { if (canViewPredictions) setSelectedEntry(entry) }}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                    >
-                      <div className="flex items-center gap-4">
-                        <span className="text-2xl w-10 text-center">{getMedalEmoji(index + 1)}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className={`font-bold truncate ${entry.userId === user?.id ? 'text-copa-gold' : 'text-copa-dark'}`}>
-                            {entry.name} {entry.userId === user?.id ? '(você)' : ''}
-                          </p>
-                          {hasFilledPredictions ? (
-                            <p className="text-xs text-slate-600 mt-0.5">
-                              {entry.exactScores} placar exato · {entry.correctResults} resultado certo
-                              {entry.lockedCount < totalGames && (
-                                <span className="text-slate-600"> · {entry.lockedCount}/{totalGames} palpites</span>
-                              )}
+              <div className="card overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-copa-border">
+                      <th className="text-left px-4 py-2.5 text-xs text-slate-500 font-semibold w-10">#</th>
+                      <th className="text-left px-2 py-2.5 text-xs text-slate-500 font-semibold">Participante</th>
+                      <th className="text-center px-4 py-2.5 text-xs text-slate-500 font-semibold w-16">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rankingData?.rankings.map((entry, index) => {
+                      const hasFilledPredictions = entry.lockedCount > 0
+                      const canViewPredictions = isAllLocked && hasFilledPredictions
+                      return (
+                        <tr
+                          key={entry.userId}
+                          className={`border-t border-copa-border ${canViewPredictions ? 'cursor-pointer active:opacity-70' : 'cursor-default'} ${entry.userId === user?.id ? 'bg-copa-gold/5' : ''}`}
+                          onClick={() => { if (canViewPredictions) setSelectedEntry(entry) }}
+                        >
+                          <td className="px-4 py-3 font-extrabold text-copa-dark tabular-nums">{index + 1}º</td>
+                          <td className="px-2 py-3">
+                            <p className={`font-bold ${entry.userId === user?.id ? 'text-copa-gold' : 'text-copa-dark'}`}>
+                              {entry.name} {entry.userId === user?.id ? '(você)' : ''}
                             </p>
-                          ) : (
-                            <p className="text-xs text-slate-400 mt-0.5 italic">Palpites ainda não preenchidos</p>
-                          )}
-                        </div>
-                        {hasFilledPredictions && (
-                          <div className="text-right">
-                            <p className="text-2xl font-extrabold text-copa-dark">{entry.totalPoints}</p>
-                            <p className="text-xs text-slate-600">pts</p>
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  )
-                })}
+                            {hasFilledPredictions ? (
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {entry.exactScores} exato · {entry.correctResults} resultado certo
+                              </p>
+                            ) : (
+                              <p className="text-xs text-slate-400 mt-0.5 italic">Palpites não preenchidos</p>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {hasFilledPredictions && (
+                              <>
+                                <span className="text-xl font-extrabold text-copa-dark tabular-nums">{entry.totalPoints}</span>
+                                <span className="text-xs text-slate-500 ml-0.5">pts</span>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </motion.div>
@@ -404,90 +403,78 @@ export default function RankingPage() {
                 )}
 
                 {summaryData.games.map(game => (
-                  <div key={game.number} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden' }}>
-                    {/* Cabeçalho do jogo */}
-                    <div style={{ borderBottom: '1px solid #D9CBAD', padding: '10px 16px' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
-                        <tbody>
-                          <tr>
-                            <td style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>
-                              Jogo {game.number}
+                  <table key={game.number} style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD' }}>
+                    <tbody>
+                      {/* Meta: Jogo X e horário */}
+                      <tr>
+                        <td colSpan={3} style={{ paddingTop: 10, paddingBottom: 4, paddingLeft: 16, paddingRight: 16 }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <tbody><tr>
+                              <td style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>Jogo {game.number}</td>
+                              <td style={{ fontSize: 11, color: '#64748b', textAlign: 'right' }}>
+                                {new Date(game.matchDate).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                              </td>
+                            </tr></tbody>
+                          </table>
+                        </td>
+                      </tr>
+
+                      {/* Placar com bandeiras coladas nos nomes — nested table por time */}
+                      <tr style={{ borderBottom: '1px solid #D9CBAD' }}>
+                        <td style={{ textAlign: 'right', verticalAlign: 'middle', paddingTop: 6, paddingBottom: 12, paddingLeft: 16, paddingRight: 8 }}>
+                          <table style={{ display: 'inline-table', borderCollapse: 'collapse', marginLeft: 'auto' }}>
+                            <tbody><tr>
+                              {FLAG_CODES[game.team1] && (
+                                <td style={{ verticalAlign: 'middle', paddingRight: 5 }}>
+                                  <img src={`/flags/${FLAG_CODES[game.team1]}.png`} alt="" width={20} height={14} style={{ display: 'block' }} />
+                                </td>
+                              )}
+                              <td style={{ verticalAlign: 'middle' }}>
+                                <span style={{ fontWeight: 700, fontSize: 15, color: '#1a1a1a' }}>{TEAM_ABBR[game.team1] ?? game.team1}</span>
+                              </td>
+                            </tr></tbody>
+                          </table>
+                        </td>
+                        <td style={{ textAlign: 'center', verticalAlign: 'middle', paddingTop: 6, paddingBottom: 12, paddingLeft: 6, paddingRight: 6, width: 80, whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: 22, fontWeight: 900, color: '#1a1a1a' }}>{game.score1} × {game.score2}</span>
+                        </td>
+                        <td style={{ textAlign: 'left', verticalAlign: 'middle', paddingTop: 6, paddingBottom: 12, paddingLeft: 8, paddingRight: 16 }}>
+                          <table style={{ display: 'inline-table', borderCollapse: 'collapse' }}>
+                            <tbody><tr>
+                              <td style={{ verticalAlign: 'middle' }}>
+                                <span style={{ fontWeight: 700, fontSize: 15, color: '#1a1a1a' }}>{TEAM_ABBR[game.team2] ?? game.team2}</span>
+                              </td>
+                              {FLAG_CODES[game.team2] && (
+                                <td style={{ verticalAlign: 'middle', paddingLeft: 5 }}>
+                                  <img src={`/flags/${FLAG_CODES[game.team2]}.png`} alt="" width={20} height={14} style={{ display: 'block' }} />
+                                </td>
+                              )}
+                            </tr></tbody>
+                          </table>
+                        </td>
+                      </tr>
+
+                      {/* Palpites — mesmas 3 colunas, placar alinha com o do jogo */}
+                      {game.predictions.map((pred, idx) => {
+                        const bgColor = pred.points === 3 ? 'rgba(0,254,168,0.12)' : pred.points === 1 ? 'rgba(255,209,0,0.12)' : 'transparent'
+                        const ptsColor = pred.points === 3 ? '#295A71' : pred.points === 1 ? '#B8960A' : '#e63946'
+                        const firstName = pred.name.split(' ')[0]
+                        return (
+                          <tr key={pred.userId} style={{ backgroundColor: bgColor, borderTop: idx === 0 ? 'none' : '1px solid #D9CBAD' }}>
+                            <td style={{ paddingTop: 10, paddingBottom: 10, paddingLeft: 16, paddingRight: 8, fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>
+                              {firstName}
                             </td>
-                            <td style={{ fontSize: 11, color: '#64748b', textAlign: 'right' }}>
-                              {new Date(game.matchDate).toLocaleString('pt-BR', {
-                                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-                                timeZone: 'America/Sao_Paulo',
-                              })}
+                            <td style={{ paddingTop: 10, paddingBottom: 10, paddingLeft: 6, paddingRight: 6, fontSize: 14, color: '#475569', textAlign: 'center', whiteSpace: 'nowrap', width: 80 }}>
+                              {pred.score1 !== null ? `${pred.score1} × ${pred.score2}` : '—'}
+                            </td>
+                            <td style={{ paddingTop: 10, paddingBottom: 10, paddingLeft: 8, paddingRight: 16, fontSize: 13, fontWeight: 700, color: ptsColor, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              {pred.points === 3 ? '+3 pts' : pred.points === 1 ? '+1 pt' : '0 pts'}
                             </td>
                           </tr>
-                        </tbody>
-                      </table>
-                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <tbody>
-                          <tr>
-                            {/* time 1: bandeira em célula própria */}
-                            <td style={{ width: 24, verticalAlign: 'middle', paddingRight: 4 }}>
-                              <img src={`/flags/${FLAG_CODES[game.team1]}.png`} alt="" width={20} height={14} style={{ display: 'block' }} />
-                            </td>
-                            <td style={{ textAlign: 'right', verticalAlign: 'middle', paddingRight: 10 }}>
-                              <span style={{ fontWeight: 700, color: '#1a1a1a', fontSize: 14 }}>
-                                {TEAM_ABBR[game.team1] ?? game.team1}
-                              </span>
-                            </td>
-                            {/* placar */}
-                            <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 6px' }}>
-                              <span style={{ fontSize: 20, fontWeight: 900, color: '#1a1a1a' }}>
-                                {game.score1} × {game.score2}
-                              </span>
-                            </td>
-                            {/* time 2 */}
-                            <td style={{ textAlign: 'left', verticalAlign: 'middle', paddingLeft: 10 }}>
-                              <span style={{ fontWeight: 700, color: '#1a1a1a', fontSize: 14 }}>
-                                {TEAM_ABBR[game.team2] ?? game.team2}
-                              </span>
-                            </td>
-                            <td style={{ width: 24, verticalAlign: 'middle', paddingLeft: 4 }}>
-                              <img src={`/flags/${FLAG_CODES[game.team2]}.png`} alt="" width={20} height={14} style={{ display: 'block' }} />
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Palpites */}
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <tbody>
-                        {game.predictions.map((pred, idx) => {
-                          const bgColor = pred.points === 3
-                            ? 'rgba(0,254,168,0.12)'
-                            : pred.points === 1
-                            ? 'rgba(255,209,0,0.12)'
-                            : 'transparent'
-                          const badgeStyle = pred.points === 3
-                            ? { backgroundColor: 'rgba(0,254,168,0.2)', color: '#295A71' }
-                            : pred.points === 1
-                            ? { backgroundColor: 'rgba(255,209,0,0.2)', color: '#B8960A' }
-                            : { backgroundColor: 'rgba(230,57,70,0.1)', color: '#e63946' }
-
-                          return (
-                            <tr key={pred.userId} style={{ backgroundColor: bgColor, borderTop: idx > 0 ? '1px solid #D9CBAD' : 'none' }}>
-                              <td style={{ padding: '10px 16px', fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>
-                                {pred.name}
-                              </td>
-                              <td style={{ padding: '10px 8px', fontSize: 14, color: '#475569', textAlign: 'center', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                                {pred.score1 !== null ? `${pred.score1} × ${pred.score2}` : '—'}
-                              </td>
-                              <td style={{ paddingTop: 10, paddingBottom: 10, paddingRight: 16, paddingLeft: 8, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                <span style={{ ...badgeStyle, display: 'inline-block', fontSize: 12, fontWeight: 700, paddingTop: 3, paddingBottom: 3, paddingLeft: 8, paddingRight: 8, borderRadius: 4 }}>
-                                  {pred.points === 3 ? '+3 pts' : pred.points === 1 ? '+1 pt' : '0 pts'}
-                                </span>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 ))}
 
                 {summaryData.games.length > 0 && (
@@ -668,16 +655,16 @@ export default function RankingPage() {
                                 {idx > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}
                                 <div className="p-3 relative">
                                   <div className="flex items-center gap-2 text-sm">
-                                    <span className="font-semibold text-copa-dark text-right flex-1 flex items-center justify-end gap-1">
-                                      {TEAM_ABBR[pred.game.team1] ?? pred.game.team1}
+                                    <span className="font-semibold text-copa-dark text-right flex-1 flex items-center justify-end gap-1.5">
                                       <FlagImage team={pred.game.team1} size={16} />
+                                      {TEAM_ABBR[pred.game.team1] ?? pred.game.team1}
                                     </span>
                                     <span className="font-extrabold text-copa-dark shrink-0 tabular-nums">
                                       {pred.score1} × {pred.score2}
                                     </span>
-                                    <span className="font-semibold text-copa-dark flex-1 flex items-center gap-1">
-                                      <FlagImage team={pred.game.team2} size={16} />
+                                    <span className="font-semibold text-copa-dark flex-1 flex items-center gap-1.5">
                                       {TEAM_ABBR[pred.game.team2] ?? pred.game.team2}
+                                      <FlagImage team={pred.game.team2} size={16} />
                                     </span>
                                   </div>
                                   {pts !== null && pts !== undefined && (
