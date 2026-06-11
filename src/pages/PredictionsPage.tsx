@@ -137,7 +137,13 @@ export default function PredictionsPage() {
   const [lockError, setLockError] = useState('')
   const [locking, setLocking] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [now, setNow] = useState(() => new Date())
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 30_000)
+    return () => clearInterval(interval)
+  }, [])
 
   const score1Refs = useRef<Record<string, HTMLInputElement | null>>({})
   const score2Refs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -316,7 +322,6 @@ export default function PredictionsPage() {
   for (const groupLetter of GROUPS) gamesByGroup[groupLetter] = []
   for (const game of games) gamesByGroup[game.group]?.push(game)
 
-  const now = new Date()
   const openGames = games.filter(g => new Date(g.matchDate) > now)
   const startedGames = new Set(games.filter(g => new Date(g.matchDate) <= now).map(g => g.id))
 
@@ -334,6 +339,8 @@ export default function PredictionsPage() {
     : filledCount > 0
   const isAllLocked = savedPredictions?.some(p => p.isLocked) ?? false
 
+  const startedGamesList = games.filter(g => startedGames.has(g.id))
+
   if (showConfirm) {
     return (
       <motion.div
@@ -341,20 +348,31 @@ export default function PredictionsPage() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
       >
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h2 className="text-2xl font-extrabold text-copa-dark">Confirmar palpites?</h2>
           <p className="text-slate-600 mt-3 leading-relaxed text-sm">
             Você preencheu <span className="text-copa-gold font-bold">{openFilledCount} de {openGames.length}</span> jogos disponíveis.
-            {startedGames.size > 0 && (
-              <span className="block mt-1 text-xs text-copa-red">
-                {startedGames.size} jogo{startedGames.size > 1 ? 's' : ''} já iniciado{startedGames.size > 1 ? 's' : ''} não serão pontuados.
-              </span>
-            )}
           </p>
           <p className="text-copa-red text-sm font-semibold mt-2">
             Após confirmar, não será possível alterar.
           </p>
         </div>
+
+        {startedGamesList.length > 0 && (
+          <div className="card p-4 mb-6 border border-copa-red/20">
+            <p className="text-sm font-bold text-copa-red mb-2">
+              {startedGamesList.length} jogo{startedGamesList.length > 1 ? 's' : ''} já iniciado{startedGamesList.length > 1 ? 's' : ''} — não serão pontuados:
+            </p>
+            <div className="space-y-1">
+              {startedGamesList.map(g => (
+                <p key={g.id} className="text-xs text-slate-600">
+                  · {TEAM_ABBR[g.team1] ?? g.team1} × {TEAM_ABBR[g.team2] ?? g.team2}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
         {lockError && <p className="text-copa-red text-sm text-center mb-4">{lockError}</p>}
         <div className="space-y-3">
           <button className="btn-primary" onClick={handleLockAll} disabled={locking}>
