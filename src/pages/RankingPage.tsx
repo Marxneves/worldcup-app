@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -135,10 +135,10 @@ export default function RankingPage() {
   const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null)
   const [upcomingExpanded, setUpcomingExpanded] = useState(true)
   const [resultsExpanded, setResultsExpanded] = useState(true)
-  const [summaryDate, setSummaryDate] = useState(() =>
-    new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  )
+  const todayBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const [summaryDate, setSummaryDate] = useState(() => todayBRT)
   const [sharing, setSharing] = useState(false)
+  const [selectedGameNumber, setSelectedGameNumber] = useState<number | null>(null)
   const summaryRef = useRef<HTMLDivElement>(null)
 
   const queryClient = useQueryClient()
@@ -150,6 +150,19 @@ export default function RankingPage() {
       return data as DailySummary
     },
     enabled: activeTab === 'summary' && !!poolCode,
+  })
+
+  useEffect(() => { setSelectedGameNumber(null) }, [summaryDate])
+
+  const { data: gameRankingData } = useQuery({
+    queryKey: ['daily-summary', poolCode, summaryDate, selectedGameNumber],
+    queryFn: async () => {
+      const { data } = await api.get(`/pools/${poolCode}/daily-summary`, {
+        params: { date: summaryDate, upToGame: selectedGameNumber },
+      })
+      return data as DailySummary
+    },
+    enabled: activeTab === 'summary' && !!poolCode && selectedGameNumber !== null,
   })
 
   async function handleShare() {
@@ -229,6 +242,10 @@ export default function RankingPage() {
 
   const upcomingGames = gamesData?.filter(g => g.score1 === null) ?? []
   const finishedGames = gamesData?.filter(g => g.score1 !== null) ?? []
+
+  const activeData = selectedGameNumber !== null ? gameRankingData : summaryData
+  const visibleGames = activeData?.games ?? []
+  const visibleRanking = activeData?.ranking ?? []
 
   return (
     <div className="min-h-screen pb-8">
@@ -367,21 +384,42 @@ export default function RankingPage() {
 
         {activeTab === 'summary' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <input
                 type="date"
                 value={summaryDate}
+                max={todayBRT}
                 onChange={e => setSummaryDate(e.target.value)}
                 className="text-sm border border-copa-border rounded-lg px-3 py-1.5 bg-white text-copa-dark"
               />
               <button
                 onClick={handleShare}
-                disabled={sharing || summaryLoading || !summaryData}
+                disabled={sharing || summaryLoading || !summaryData || summaryData.games.length === 0}
                 className="flex items-center gap-1.5 bg-copa-teal text-white text-sm font-semibold px-4 py-1.5 rounded-xl disabled:opacity-50"
               >
                 {sharing ? '⏳' : '📤'} Compartilhar
               </button>
             </div>
+
+            {summaryData && summaryData.games.length > 1 && (
+              <div className="flex gap-2 mb-4 flex-wrap">
+                <button
+                  onClick={() => setSelectedGameNumber(null)}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === null ? 'bg-copa-teal text-white border-copa-teal' : 'bg-white text-slate-600 border-copa-border'}`}
+                >
+                  Todos
+                </button>
+                {summaryData.games.map(g => (
+                  <button
+                    key={g.number}
+                    onClick={() => setSelectedGameNumber(g.number)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === g.number ? 'bg-copa-teal text-white border-copa-teal' : 'bg-white text-slate-600 border-copa-border'}`}
+                  >
+                    Jogo {g.number}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {summaryLoading && (
               <div className="text-center text-slate-600 py-12">Carregando resumo...</div>
@@ -395,7 +433,7 @@ export default function RankingPage() {
                   </div>
                 )}
 
-                {summaryData.games.map(game => (
+                {visibleGames.map(game => (
                   <table key={game.number} style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD' }}>
                     <tbody>
                       {/* Meta: Jogo X e horário */}
@@ -470,7 +508,7 @@ export default function RankingPage() {
                   </table>
                 ))}
 
-                {summaryData.games.length > 0 && (
+                {visibleGames.length > 0 && (
                   <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden' }}>
                     <div style={{ borderBottom: '1px solid #D9CBAD', padding: '10px 16px' }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -482,26 +520,24 @@ export default function RankingPage() {
                         <tr style={{ borderBottom: '1px solid #D9CBAD' }}>
                           <th style={{ textAlign: 'left', padding: '8px 16px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 48 }}>#</th>
                           <th style={{ textAlign: 'left', padding: '8px 8px', fontSize: 11, color: '#64748b', fontWeight: 600 }}>Participante</th>
-                          <th style={{ textAlign: 'center', padding: '8px 8px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 56 }}>Hoje</th>
+                          <th style={{ textAlign: 'center', padding: '8px 8px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 56 }}>Jogo</th>
                           <th style={{ textAlign: 'center', padding: '8px 16px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 56 }}>Total</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {summaryData.ranking.map((entry, idx) => {
+                        {visibleRanking.map((entry, idx) => {
                           const moved = entry.movement
                           const movementIcon = moved > 0 ? '▲' : moved < 0 ? '▼' : ''
                           const movementColor = moved > 0 ? '#22c55e' : moved < 0 ? '#e63946' : 'transparent'
-                          const nameColor = entry.userId === user?.id ? '#FFD100' : '#1a1a1a'
-
                           return (
-                            <tr key={entry.userId} style={{ borderTop: idx > 0 ? '1px solid #D9CBAD' : 'none', backgroundColor: entry.userId === user?.id ? 'rgba(255,209,0,0.05)' : 'transparent' }}>
+                            <tr key={entry.userId} style={{ borderTop: idx > 0 ? '1px solid #D9CBAD' : 'none' }}>
                               <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                                 <span style={{ fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>{entry.position}º</span>
                                 {movementIcon && (
                                   <span style={{ fontSize: 10, fontWeight: 700, color: movementColor, marginLeft: 3 }}>{movementIcon}</span>
                                 )}
                               </td>
-                              <td style={{ padding: '10px 8px', fontWeight: 600, color: nameColor }}>{entry.name}</td>
+                              <td style={{ padding: '10px 8px', fontWeight: 600, color: '#1a1a1a' }}>{entry.name}</td>
                               <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, color: '#295A71', fontVariantNumeric: 'tabular-nums' }}>
                                 {entry.todayPoints > 0 ? `+${entry.todayPoints}` : '—'}
                               </td>
