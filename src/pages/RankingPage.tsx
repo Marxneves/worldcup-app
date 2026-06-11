@@ -6,7 +6,7 @@ import html2canvas from 'html2canvas'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { RankingEntry, Game, Prediction, Pool, DailySummary } from '../types'
-import FlagImage, { TEAM_ABBR } from '../components/FlagImage'
+import FlagImage, { TEAM_ABBR, FLAG_CODES } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
 
 function getMedalEmoji(position: number): string {
@@ -186,6 +186,7 @@ export default function RankingPage() {
     await api.post('/admin/results', { gameNumber, score1, score2 })
     await queryClient.invalidateQueries({ queryKey: ['games'] })
     await queryClient.invalidateQueries({ queryKey: ['ranking', poolCode] })
+    await queryClient.invalidateQueries({ queryKey: ['predictions', poolCode] })
   }
 
   const { data: rankingData, isLoading: rankingLoading } = useQuery({
@@ -378,7 +379,6 @@ export default function RankingPage() {
               <input
                 type="date"
                 value={summaryDate}
-                max={new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)}
                 onChange={e => setSummaryDate(e.target.value)}
                 className="text-sm border border-copa-border rounded-lg px-3 py-1.5 bg-white text-copa-dark"
               />
@@ -396,126 +396,143 @@ export default function RankingPage() {
             )}
 
             {!summaryLoading && summaryData && (
-              <div ref={summaryRef} className="space-y-4" style={{ backgroundColor: '#F5EDD0' }}>
+              <div ref={summaryRef} style={{ backgroundColor: '#F5EDD0', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {summaryData.games.length === 0 && (
-                  <div className="card p-6 text-center text-slate-600 text-sm">
+                  <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, padding: '24px 16px', textAlign: 'center', color: '#64748b', fontSize: 14 }}>
                     Nenhum jogo com resultado nessa data.
                   </div>
                 )}
 
                 {summaryData.games.map(game => (
-                  <div key={game.number} className="card overflow-hidden">
-                    <div className="px-4 py-3 border-b border-copa-border">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                          Jogo {game.number}
-                        </span>
-                        <span className="text-xs text-slate-500">
-                          {new Date(game.matchDate).toLocaleString('pt-BR', {
-                            day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-                            timeZone: 'America/Sao_Paulo',
-                          })}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-center gap-3 mt-2">
-                        <div className="flex items-center gap-1.5">
-                          <FlagImage team={game.team1} size={20} />
-                          <span className="font-bold text-copa-dark text-sm">{TEAM_ABBR[game.team1] ?? game.team1}</span>
-                        </div>
-                        <span className="text-xl font-extrabold text-copa-dark tabular-nums">
-                          {game.score1} × {game.score2}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-copa-dark text-sm">{TEAM_ABBR[game.team2] ?? game.team2}</span>
-                          <FlagImage team={game.team2} size={20} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="divide-y divide-copa-border">
-                      {game.predictions.map(pred => {
-                        const bgColor = pred.points === 3
-                          ? 'rgba(0,254,168,0.12)'
-                          : pred.points === 1
-                          ? 'rgba(255,209,0,0.12)'
-                          : 'transparent'
-                        const badgeColor = pred.points === 3
-                          ? { bg: 'rgba(0,254,168,0.2)', text: '#295A71' }
-                          : pred.points === 1
-                          ? { bg: 'rgba(255,209,0,0.2)', text: '#B8960A' }
-                          : { bg: 'rgba(230,57,70,0.1)', text: '#e63946' }
-
-                        return (
-                          <div key={pred.userId} className="flex items-center px-4 py-2.5" style={{ backgroundColor: bgColor }}>
-                            <span className="flex-1 text-sm font-semibold text-copa-dark truncate">{pred.name}</span>
-                            {pred.score1 !== null ? (
-                              <span className="text-sm tabular-nums text-slate-600 mx-3">
-                                {pred.score1} × {pred.score2}
+                  <div key={game.number} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden' }}>
+                    {/* Cabeçalho do jogo */}
+                    <div style={{ borderBottom: '1px solid #D9CBAD', padding: '10px 16px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>
+                              Jogo {game.number}
+                            </td>
+                            <td style={{ fontSize: 11, color: '#64748b', textAlign: 'right' }}>
+                              {new Date(game.matchDate).toLocaleString('pt-BR', {
+                                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                                timeZone: 'America/Sao_Paulo',
+                              })}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ textAlign: 'right', width: '40%', paddingRight: 8, verticalAlign: 'middle' }}>
+                              <img
+                                src={`/flags/${FLAG_CODES[game.team1]}.png`}
+                                alt={game.team1}
+                                width={20}
+                                height={20}
+                                style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
+                              />
+                              <span style={{ fontWeight: 700, color: '#1a1a1a', fontSize: 14, verticalAlign: 'middle' }}>
+                                {TEAM_ABBR[game.team1] ?? game.team1}
                               </span>
-                            ) : (
-                              <span className="text-xs text-slate-400 mx-3 italic">sem palpite</span>
-                            )}
-                            <span
-                              className="text-xs font-bold px-2 py-0.5 rounded-full shrink-0"
-                              style={{ backgroundColor: badgeColor.bg, color: badgeColor.text }}
-                            >
-                              {pred.points === 3 ? '+3 pts' : pred.points === 1 ? '+1 pt' : '0 pts'}
-                            </span>
-                          </div>
-                        )
-                      })}
+                            </td>
+                            <td style={{ textAlign: 'center', width: '20%', verticalAlign: 'middle' }}>
+                              <span style={{ fontSize: 20, fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>
+                                {game.score1} × {game.score2}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'left', width: '40%', paddingLeft: 8, verticalAlign: 'middle' }}>
+                              <span style={{ fontWeight: 700, color: '#1a1a1a', fontSize: 14, verticalAlign: 'middle' }}>
+                                {TEAM_ABBR[game.team2] ?? game.team2}
+                              </span>
+                              <img
+                                src={`/flags/${FLAG_CODES[game.team2]}.png`}
+                                alt={game.team2}
+                                width={20}
+                                height={20}
+                                style={{ display: 'inline', verticalAlign: 'middle', marginLeft: 4 }}
+                              />
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
+
+                    {/* Palpites */}
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        {game.predictions.map((pred, idx) => {
+                          const bgColor = pred.points === 3
+                            ? 'rgba(0,254,168,0.12)'
+                            : pred.points === 1
+                            ? 'rgba(255,209,0,0.12)'
+                            : 'transparent'
+                          const badgeStyle = pred.points === 3
+                            ? { backgroundColor: 'rgba(0,254,168,0.2)', color: '#295A71' }
+                            : pred.points === 1
+                            ? { backgroundColor: 'rgba(255,209,0,0.2)', color: '#B8960A' }
+                            : { backgroundColor: 'rgba(230,57,70,0.1)', color: '#e63946' }
+
+                          return (
+                            <tr key={pred.userId} style={{ backgroundColor: bgColor, borderTop: idx > 0 ? '1px solid #D9CBAD' : 'none' }}>
+                              <td style={{ padding: '10px 16px', fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>
+                                {pred.name}
+                              </td>
+                              <td style={{ padding: '10px 8px', fontSize: 14, color: '#475569', textAlign: 'center', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                {pred.score1 !== null ? `${pred.score1} × ${pred.score2}` : '—'}
+                              </td>
+                              <td style={{ padding: '10px 16px', textAlign: 'right' }}>
+                                <span style={{ ...badgeStyle, fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 999 }}>
+                                  {pred.points === 3 ? '+3 pts' : pred.points === 1 ? '+1 pt' : '0 pts'}
+                                </span>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 ))}
 
                 {summaryData.games.length > 0 && (
-                  <div className="card overflow-hidden">
-                    <div className="px-4 py-3 border-b border-copa-border">
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Ranking geral</p>
+                  <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden' }}>
+                    <div style={{ borderBottom: '1px solid #D9CBAD', padding: '10px 16px' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>
+                        Ranking geral
+                      </span>
                     </div>
-                    <table className="w-full text-sm">
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                       <thead>
-                        <tr className="border-b border-copa-border">
-                          <th className="text-left px-4 py-2 text-xs text-slate-500 font-semibold w-10">#</th>
-                          <th className="text-left px-2 py-2 text-xs text-slate-500 font-semibold">Participante</th>
-                          <th className="text-center px-2 py-2 text-xs text-slate-500 font-semibold w-14">Hoje</th>
-                          <th className="text-center px-2 py-2 text-xs text-slate-500 font-semibold w-14">Total</th>
+                        <tr style={{ borderBottom: '1px solid #D9CBAD' }}>
+                          <th style={{ textAlign: 'left', padding: '8px 16px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 48 }}>#</th>
+                          <th style={{ textAlign: 'left', padding: '8px 8px', fontSize: 11, color: '#64748b', fontWeight: 600 }}>Participante</th>
+                          <th style={{ textAlign: 'center', padding: '8px 8px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 56 }}>Hoje</th>
+                          <th style={{ textAlign: 'center', padding: '8px 16px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 56 }}>Total</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-copa-border">
-                        {summaryData.ranking.map(entry => {
+                      <tbody>
+                        {summaryData.ranking.map((entry, idx) => {
                           const moved = entry.movement
-                          const movementIcon = moved > 0 ? '▲' : moved < 0 ? '▼' : '—'
-                          const movementColor = moved > 0 ? '#22c55e' : moved < 0 ? '#e63946' : '#94a3b8'
+                          const movementIcon = moved > 0 ? '▲' : moved < 0 ? '▼' : ''
+                          const movementColor = moved > 0 ? '#22c55e' : moved < 0 ? '#e63946' : 'transparent'
+                          const nameColor = entry.userId === user?.id ? '#FFD100' : '#1a1a1a'
 
                           return (
-                            <tr key={entry.userId} className={entry.userId === user?.id ? 'bg-copa-gold/5' : ''}>
-                              <td className="px-4 py-2.5">
-                                <div className="flex items-center gap-1">
-                                  <span className="font-extrabold text-copa-dark tabular-nums">{entry.position}º</span>
-                                  <span className="text-xs font-bold tabular-nums" style={{ color: movementColor }}>
-                                    {movementIcon}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-2 py-2.5">
-                                <span className={`font-semibold truncate block max-w-[120px] ${entry.userId === user?.id ? 'text-copa-gold' : 'text-copa-dark'}`}>
-                                  {entry.name}
-                                </span>
-                                {Math.abs(moved) > 0 && (
-                                  <span className="text-xs" style={{ color: movementColor }}>
-                                    {moved > 0 ? `+${moved}` : moved} posição
-                                  </span>
+                            <tr key={entry.userId} style={{ borderTop: idx > 0 ? '1px solid #D9CBAD' : 'none', backgroundColor: entry.userId === user?.id ? 'rgba(255,209,0,0.05)' : 'transparent' }}>
+                              <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                                <span style={{ fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>{entry.position}º</span>
+                                {movementIcon && (
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: movementColor, marginLeft: 3 }}>{movementIcon}</span>
                                 )}
                               </td>
-                              <td className="px-2 py-2.5 text-center">
-                                <span className="font-bold text-copa-teal tabular-nums">
-                                  {entry.todayPoints > 0 ? `+${entry.todayPoints}` : '—'}
-                                </span>
+                              <td style={{ padding: '10px 8px', fontWeight: 600, color: nameColor }}>{entry.name}</td>
+                              <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, color: '#295A71', fontVariantNumeric: 'tabular-nums' }}>
+                                {entry.todayPoints > 0 ? `+${entry.todayPoints}` : '—'}
                               </td>
-                              <td className="px-2 py-2.5 text-center">
-                                <span className="font-extrabold text-copa-dark tabular-nums">{entry.totalPoints}</span>
-                                <span className="text-xs text-slate-500 ml-0.5">pts</span>
+                              <td style={{ padding: '10px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                <span style={{ fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>{entry.totalPoints}</span>
+                                <span style={{ fontSize: 11, color: '#64748b', marginLeft: 2 }}>pts</span>
                               </td>
                             </tr>
                           )
@@ -656,13 +673,15 @@ export default function RankingPage() {
                                 {idx > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}
                                 <div className="p-3 relative">
                                   <div className="flex items-center gap-2 text-sm">
-                                    <span className="font-semibold text-copa-dark text-right flex-1">
+                                    <span className="font-semibold text-copa-dark text-right flex-1 flex items-center justify-end gap-1">
                                       {TEAM_ABBR[pred.game.team1] ?? pred.game.team1}
+                                      <FlagImage team={pred.game.team1} size={16} />
                                     </span>
                                     <span className="font-extrabold text-copa-dark shrink-0 tabular-nums">
                                       {pred.score1} × {pred.score2}
                                     </span>
-                                    <span className="font-semibold text-copa-dark flex-1">
+                                    <span className="font-semibold text-copa-dark flex-1 flex items-center gap-1">
+                                      <FlagImage team={pred.game.team2} size={16} />
                                       {TEAM_ABBR[pred.game.team2] ?? pred.game.team2}
                                     </span>
                                   </div>
