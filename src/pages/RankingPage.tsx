@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import html2canvas from 'html2canvas'
+import domtoimage from 'dom-to-image-more'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { RankingEntry, Game, Prediction, Pool, DailySummary } from '../types'
@@ -156,21 +156,14 @@ export default function RankingPage() {
     if (!summaryRef.current) return
     setSharing(true)
     try {
-      const canvas = await html2canvas(summaryRef.current, {
-        backgroundColor: '#F5EDD0',
+      const dataUrl = await domtoimage.toPng(summaryRef.current, {
+        bgcolor: '#F5EDD0',
         scale: 2,
-        useCORS: true,
-        logging: false,
       })
-      canvas.toBlob(blob => {
-        if (!blob) return
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `resumo-${summaryDate}.png`
-        link.click()
-        URL.revokeObjectURL(url)
-      }, 'image/png')
+      const link = document.createElement('a')
+      link.href = dataUrl
+      link.download = `resumo-${summaryDate}.png`
+      link.click()
     } finally {
       setSharing(false)
     }
@@ -419,44 +412,38 @@ export default function RankingPage() {
                         </td>
                       </tr>
 
-                      {/* Placar com bandeiras coladas nos nomes — nested table por time */}
+                      {/* Placar — img inline com verticalAlign:middle, abordagem mais confiável no html2canvas */}
                       <tr style={{ borderBottom: '1px solid #D9CBAD' }}>
-                        {/* time 1: nested table com padding manual para centrar bandeira de 14px na linha de 24px */}
-                        <td style={{ textAlign: 'right', paddingTop: 6, paddingBottom: 12, paddingLeft: 16, paddingRight: 8 }}>
-                          <table style={{ display: 'inline-table', borderCollapse: 'collapse', marginLeft: 'auto' }}>
-                            <tbody><tr>
-                              {FLAG_CODES[game.team1] && (
-                                <td style={{ paddingRight: 5, paddingTop: 5, paddingBottom: 5 }}>
-                                  <img src={`/flags/${FLAG_CODES[game.team1]}.png`} alt="" width={21} height={14} style={{ display: 'block' }} />
-                                </td>
-                              )}
-                              <td>
-                                <span style={{ display: 'block', fontWeight: 700, fontSize: 15, color: '#1a1a1a', lineHeight: '24px' }}>
-                                  {TEAM_ABBR[game.team1] ?? game.team1}
-                                </span>
-                              </td>
-                            </tr></tbody>
-                          </table>
+                        <td style={{ textAlign: 'right', paddingTop: 10, paddingBottom: 10, paddingLeft: 16, paddingRight: 8, whiteSpace: 'nowrap' }}>
+                          {FLAG_CODES[game.team1] && (
+                            <img
+                              src={`/flags/${FLAG_CODES[game.team1]}.png`}
+                              crossOrigin="anonymous"
+                              width={FLAG_CODES[game.team1] === 'ch' ? 14 : 21}
+                              height={14}
+                              style={{ verticalAlign: 'middle', marginRight: 4, display: 'inline' }}
+                            />
+                          )}
+                          <span style={{ fontWeight: 700, fontSize: 13, color: '#1a1a1a', verticalAlign: 'middle' }}>
+                            {TEAM_ABBR[game.team1] ?? game.team1}
+                          </span>
                         </td>
-                        <td style={{ textAlign: 'center', paddingTop: 6, paddingBottom: 12, paddingLeft: 6, paddingRight: 6, width: 80, whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: 22, fontWeight: 900, color: '#1a1a1a', lineHeight: '24px', display: 'block' }}>{game.score1} × {game.score2}</span>
+                        <td style={{ textAlign: 'center', paddingTop: 10, paddingBottom: 10, paddingLeft: 6, paddingRight: 6, width: 80, whiteSpace: 'nowrap', fontSize: 22, fontWeight: 900, color: '#1a1a1a' }}>
+                          {game.score1} × {game.score2}
                         </td>
-                        {/* time 2 */}
-                        <td style={{ textAlign: 'left', paddingTop: 6, paddingBottom: 12, paddingLeft: 8, paddingRight: 16 }}>
-                          <table style={{ display: 'inline-table', borderCollapse: 'collapse' }}>
-                            <tbody><tr>
-                              <td>
-                                <span style={{ display: 'block', fontWeight: 700, fontSize: 15, color: '#1a1a1a', lineHeight: '24px' }}>
-                                  {TEAM_ABBR[game.team2] ?? game.team2}
-                                </span>
-                              </td>
-                              {FLAG_CODES[game.team2] && (
-                                <td style={{ paddingLeft: 5, paddingTop: 5, paddingBottom: 5 }}>
-                                  <img src={`/flags/${FLAG_CODES[game.team2]}.png`} alt="" width={21} height={14} style={{ display: 'block' }} />
-                                </td>
-                              )}
-                            </tr></tbody>
-                          </table>
+                        <td style={{ textAlign: 'left', paddingTop: 10, paddingBottom: 10, paddingLeft: 8, paddingRight: 16, whiteSpace: 'nowrap' }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: '#1a1a1a', verticalAlign: 'middle' }}>
+                            {TEAM_ABBR[game.team2] ?? game.team2}
+                          </span>
+                          {FLAG_CODES[game.team2] && (
+                            <img
+                              src={`/flags/${FLAG_CODES[game.team2]}.png`}
+                              crossOrigin="anonymous"
+                              width={FLAG_CODES[game.team2] === 'ch' ? 14 : 21}
+                              height={14}
+                              style={{ verticalAlign: 'middle', marginLeft: 4, display: 'inline' }}
+                            />
+                          )}
                         </td>
                       </tr>
 
@@ -661,23 +648,27 @@ export default function RankingPage() {
                                 {idx > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}
                                 <div className="p-3 relative">
                                   <div className="flex items-center gap-2 text-sm">
-                                    <span className="font-semibold text-copa-dark text-right flex-1 flex items-center justify-end gap-1.5">
+                                    <span className="font-semibold text-copa-dark flex-1 flex items-center justify-end gap-1.5">
                                       <FlagImage team={pred.game.team1} size={16} />
                                       {TEAM_ABBR[pred.game.team1] ?? pred.game.team1}
                                     </span>
-                                    <div className="shrink-0 text-center tabular-nums" style={{ minWidth: 56 }}>
-                                      <div className="font-extrabold text-copa-dark">{pred.score1} × {pred.score2}</div>
-                                      {pred.game.score1 !== null && (
-                                        <div className="text-xs font-semibold" style={{ color: '#295A71' }}>
-                                          {pred.game.score1} × {pred.game.score2}
-                                        </div>
-                                      )}
+                                    <div className="shrink-0 text-center tabular-nums font-extrabold text-copa-dark" style={{ minWidth: 56 }}>
+                                      {pred.score1} × {pred.score2}
                                     </div>
                                     <span className="font-semibold text-copa-dark flex-1 flex items-center gap-1.5">
                                       {TEAM_ABBR[pred.game.team2] ?? pred.game.team2}
                                       <FlagImage team={pred.game.team2} size={16} />
                                     </span>
                                   </div>
+                                  {pred.game.score1 !== null && (
+                                    <div className="flex items-center gap-2 text-xs mt-0.5">
+                                      <div className="flex-1 text-right font-semibold" style={{ color: '#295A71' }}>Resultado</div>
+                                      <div className="shrink-0 tabular-nums font-semibold text-center" style={{ minWidth: 56, color: '#295A71' }}>
+                                        {pred.game.score1} × {pred.game.score2}
+                                      </div>
+                                      <div className="flex-1" />
+                                    </div>
+                                  )}
                                   {pts !== null && pts !== undefined && (
                                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: ptsBg, color: ptsColor }}>
                                       +{pts}pts

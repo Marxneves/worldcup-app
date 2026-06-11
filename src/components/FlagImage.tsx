@@ -79,12 +79,14 @@ export default function FlagImage({ team, size = 40, className = '' }: FlagImage
   const code = FLAG_CODES[team]
   if (!code) return <span className="text-xl">🏳️</span>
 
+  const w = flagWidth(code, size)
   return (
     <img
       src={`/flags/${code}.png`}
       alt={team}
-      width={flagWidth(code, size)}
+      width={w}
       height={size}
+      style={{ width: w, height: size, flexShrink: 0 }}
       className={`rounded-sm ${className}`}
     />
   )
