@@ -137,7 +137,13 @@ export default function PredictionsPage() {
   const [lockError, setLockError] = useState('')
   const [locking, setLocking] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [now, setNow] = useState(() => new Date())
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 30_000)
+    return () => clearInterval(interval)
+  }, [])
 
   const score1Refs = useRef<Record<string, HTMLInputElement | null>>({})
   const score2Refs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -316,13 +322,24 @@ export default function PredictionsPage() {
   for (const groupLetter of GROUPS) gamesByGroup[groupLetter] = []
   for (const game of games) gamesByGroup[game.group]?.push(game)
 
+  const openGames = games.filter(g => new Date(g.matchDate) > now)
+  const startedGames = new Set(games.filter(g => new Date(g.matchDate) <= now).map(g => g.id))
+
   const filledCount = Object.values(scores).filter(
     ([score1, score2]) => score1 !== '' && score2 !== ''
   ).length
+  const openFilledCount = openGames.filter(g => {
+    const [s1, s2] = scores[g.id] ?? ['', '']
+    return s1 !== '' && s2 !== ''
+  }).length
 
   const lockedPredictions = new Map(savedPredictions?.map(p => [p.gameId, p]) ?? [])
-  const allFilled = filledCount === games.length
-  const isAllLocked = !!savedPredictions?.length && savedPredictions.every(p => p.isLocked)
+  const allFilled = openGames.length > 0
+    ? openFilledCount === openGames.length
+    : filledCount > 0
+  const isAllLocked = savedPredictions?.some(p => p.isLocked) ?? false
+
+  const startedGamesList = games.filter(g => startedGames.has(g.id))
 
   if (showConfirm) {
     return (
@@ -331,15 +348,31 @@ export default function PredictionsPage() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
       >
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h2 className="text-2xl font-extrabold text-copa-dark">Confirmar palpites?</h2>
           <p className="text-slate-600 mt-3 leading-relaxed text-sm">
-            Você preencheu <span className="text-copa-gold font-bold">{filledCount} de {games.length}</span> jogos.
+            Você preencheu <span className="text-copa-gold font-bold">{openFilledCount} de {openGames.length}</span> jogos disponíveis.
           </p>
           <p className="text-copa-red text-sm font-semibold mt-2">
             Após confirmar, não será possível alterar.
           </p>
         </div>
+
+        {startedGamesList.length > 0 && (
+          <div className="card p-4 mb-6 border border-copa-red/20">
+            <p className="text-sm font-bold text-copa-red mb-2">
+              {startedGamesList.length} jogo{startedGamesList.length > 1 ? 's' : ''} já iniciado{startedGamesList.length > 1 ? 's' : ''} — não serão pontuados:
+            </p>
+            <div className="space-y-1">
+              {startedGamesList.map(g => (
+                <p key={g.id} className="text-xs text-slate-600">
+                  · {TEAM_ABBR[g.team1] ?? g.team1} × {TEAM_ABBR[g.team2] ?? g.team2}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
         {lockError && <p className="text-copa-red text-sm text-center mb-4">{lockError}</p>}
         <div className="space-y-3">
           <button className="btn-primary" onClick={handleLockAll} disabled={locking}>
@@ -369,14 +402,14 @@ export default function PredictionsPage() {
             ← {pool.name}
           </button>
           <span className="text-sm text-slate-600">
-            {filledCount}/{games.length} palpites
+            {openFilledCount}/{openGames.length} palpites
           </span>
         </div>
 
         <div className="h-1.5 bg-copa-border rounded-full overflow-hidden mb-3">
           <motion.div
             className="h-full bg-copa-gold rounded-full"
-            animate={{ width: `${(filledCount / games.length) * 100}%` }}
+            animate={{ width: `${openGames.length > 0 ? (openFilledCount / openGames.length) * 100 : 100}%` }}
             transition={{ duration: 0.4 }}
           />
         </div>
@@ -582,17 +615,19 @@ export default function PredictionsPage() {
                       </div>
                     ) : (() => {
                       const isPredictionLocked = lockedPredictions.get(game.id)?.isLocked ?? false
+                      const isGameStarted = startedGames.has(game.id)
+                      const isDisabled = isPredictionLocked || isGameStarted
                       return (
                         <div className="p-4">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5 flex-1 justify-end">
-                              <span className="text-sm font-semibold text-copa-dark">
+                              <span className={`text-sm font-semibold ${isGameStarted ? 'text-slate-400' : 'text-copa-dark'}`}>
                                 {TEAM_ABBR[game.team1] ?? game.team1}
                               </span>
                               <img
                                 src={`/flags/${FLAG_CODES[game.team1] ?? 'xx'}.png`}
                                 alt={game.team1}
-                                className="w-8 h-6 object-cover rounded-sm shrink-0"
+                                className={`w-8 h-6 object-cover rounded-sm shrink-0 ${isGameStarted ? 'opacity-40' : ''}`}
                               />
                             </div>
 
@@ -604,7 +639,7 @@ export default function PredictionsPage() {
                                 value={score1}
                                 onChange={e => handleScoreChange(game.id, 0, e.target.value)}
                                 onFocus={e => e.target.select()}
-                                disabled={isPredictionLocked}
+                                disabled={isDisabled}
                                 placeholder="–"
                                 className="score-input w-11 h-11 text-center text-lg font-bold rounded-xl"
                               />
@@ -616,7 +651,7 @@ export default function PredictionsPage() {
                                 value={score2}
                                 onChange={e => handleScoreChange(game.id, 1, e.target.value)}
                                 onFocus={e => e.target.select()}
-                                disabled={isPredictionLocked}
+                                disabled={isDisabled}
                                 placeholder="–"
                                 className="score-input w-11 h-11 text-center text-lg font-bold rounded-xl"
                               />
@@ -626,16 +661,19 @@ export default function PredictionsPage() {
                               <img
                                 src={`/flags/${FLAG_CODES[game.team2] ?? 'xx'}.png`}
                                 alt={game.team2}
-                                className="w-8 h-6 object-cover rounded-sm shrink-0"
+                                className={`w-8 h-6 object-cover rounded-sm shrink-0 ${isGameStarted ? 'opacity-40' : ''}`}
                               />
-                              <span className="text-sm font-semibold text-copa-dark">
+                              <span className={`text-sm font-semibold ${isGameStarted ? 'text-slate-400' : 'text-copa-dark'}`}>
                                 {TEAM_ABBR[game.team2] ?? game.team2}
                               </span>
                             </div>
                           </div>
 
-                          <p className="text-xs text-slate-600 text-center mt-2">
-                            {dateStr}
+                          <p className="text-xs text-center mt-2">
+                            {isGameStarted
+                              ? <span className="text-copa-red font-semibold">Jogo iniciado — sem pontuação</span>
+                              : <span className="text-slate-600">{dateStr}</span>
+                            }
                           </p>
                         </div>
                       )

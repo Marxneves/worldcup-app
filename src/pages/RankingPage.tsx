@@ -198,7 +198,7 @@ export default function RankingPage() {
   const myPredictions = new Map(predictionsData?.map(p => [p.gameId, p]) ?? [])
   const totalGames = gamesData?.length ?? 0
   const filledCount = predictionsData?.length ?? 0
-  const isAllLocked = filledCount >= totalGames && totalGames > 0 && (predictionsData?.every(p => p.isLocked) ?? false)
+  const isAllLocked = (predictionsData?.some(p => p.isLocked) ?? false)
 
   const upcomingGames = gamesData?.filter(g => g.score1 === null) ?? []
   const finishedGames = gamesData?.filter(g => g.score1 !== null) ?? []
