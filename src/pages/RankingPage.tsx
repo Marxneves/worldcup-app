@@ -49,7 +49,7 @@ function GameCard({ game, dateStr, prediction, isAdmin, onSaveResult }: GameCard
       )}
       <div className="flex items-center justify-center gap-3">
         <div className="flex items-center gap-1.5">
-          <FlagImage team={game.team1} size={22} className="shrink-0" />
+          <FlagImage team={game.team1} size={16} className="shrink-0" />
           <span className="text-sm font-semibold text-copa-dark">{TEAM_ABBR[game.team1] ?? game.team1}</span>
         </div>
         <span className="text-sm font-bold text-copa-dark px-1">
@@ -57,7 +57,7 @@ function GameCard({ game, dateStr, prediction, isAdmin, onSaveResult }: GameCard
         </span>
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-semibold text-copa-dark">{TEAM_ABBR[game.team2] ?? game.team2}</span>
-          <FlagImage team={game.team2} size={22} className="shrink-0" />
+          <FlagImage team={game.team2} size={16} className="shrink-0" />
         </div>
         {isAdmin && !editing && (
           <button
@@ -421,26 +421,42 @@ export default function RankingPage() {
 
                       {/* Placar com bandeiras coladas nos nomes — nested table por time */}
                       <tr style={{ borderBottom: '1px solid #D9CBAD' }}>
-                        <td style={{ textAlign: 'right', verticalAlign: 'middle', paddingTop: 6, paddingBottom: 12, paddingLeft: 16, paddingRight: 8, lineHeight: '20px' }}>
-                          {FLAG_CODES[game.team1] && (
-                            <img src={`/flags/${FLAG_CODES[game.team1]}.png`} alt="" width={20} height={14}
-                              style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 5 }} />
-                          )}
-                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontWeight: 700, fontSize: 15, color: '#1a1a1a' }}>
-                            {TEAM_ABBR[game.team1] ?? game.team1}
-                          </span>
+                        {/* time 1: nested table com padding manual para centrar bandeira de 14px na linha de 24px */}
+                        <td style={{ textAlign: 'right', paddingTop: 6, paddingBottom: 12, paddingLeft: 16, paddingRight: 8 }}>
+                          <table style={{ display: 'inline-table', borderCollapse: 'collapse', marginLeft: 'auto' }}>
+                            <tbody><tr>
+                              {FLAG_CODES[game.team1] && (
+                                <td style={{ paddingRight: 5, paddingTop: 5, paddingBottom: 5 }}>
+                                  <img src={`/flags/${FLAG_CODES[game.team1]}.png`} alt="" width={21} height={14} style={{ display: 'block' }} />
+                                </td>
+                              )}
+                              <td>
+                                <span style={{ display: 'block', fontWeight: 700, fontSize: 15, color: '#1a1a1a', lineHeight: '24px' }}>
+                                  {TEAM_ABBR[game.team1] ?? game.team1}
+                                </span>
+                              </td>
+                            </tr></tbody>
+                          </table>
                         </td>
-                        <td style={{ textAlign: 'center', verticalAlign: 'middle', paddingTop: 6, paddingBottom: 12, paddingLeft: 6, paddingRight: 6, width: 80, whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: 22, fontWeight: 900, color: '#1a1a1a' }}>{game.score1} × {game.score2}</span>
+                        <td style={{ textAlign: 'center', paddingTop: 6, paddingBottom: 12, paddingLeft: 6, paddingRight: 6, width: 80, whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: 22, fontWeight: 900, color: '#1a1a1a', lineHeight: '24px', display: 'block' }}>{game.score1} × {game.score2}</span>
                         </td>
-                        <td style={{ textAlign: 'left', verticalAlign: 'middle', paddingTop: 6, paddingBottom: 12, paddingLeft: 8, paddingRight: 16, lineHeight: '20px' }}>
-                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontWeight: 700, fontSize: 15, color: '#1a1a1a' }}>
-                            {TEAM_ABBR[game.team2] ?? game.team2}
-                          </span>
-                          {FLAG_CODES[game.team2] && (
-                            <img src={`/flags/${FLAG_CODES[game.team2]}.png`} alt="" width={20} height={14}
-                              style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: 5 }} />
-                          )}
+                        {/* time 2 */}
+                        <td style={{ textAlign: 'left', paddingTop: 6, paddingBottom: 12, paddingLeft: 8, paddingRight: 16 }}>
+                          <table style={{ display: 'inline-table', borderCollapse: 'collapse' }}>
+                            <tbody><tr>
+                              <td>
+                                <span style={{ display: 'block', fontWeight: 700, fontSize: 15, color: '#1a1a1a', lineHeight: '24px' }}>
+                                  {TEAM_ABBR[game.team2] ?? game.team2}
+                                </span>
+                              </td>
+                              {FLAG_CODES[game.team2] && (
+                                <td style={{ paddingLeft: 5, paddingTop: 5, paddingBottom: 5 }}>
+                                  <img src={`/flags/${FLAG_CODES[game.team2]}.png`} alt="" width={21} height={14} style={{ display: 'block' }} />
+                                </td>
+                              )}
+                            </tr></tbody>
+                          </table>
                         </td>
                       </tr>
 
@@ -649,9 +665,14 @@ export default function RankingPage() {
                                       <FlagImage team={pred.game.team1} size={16} />
                                       {TEAM_ABBR[pred.game.team1] ?? pred.game.team1}
                                     </span>
-                                    <span className="font-extrabold text-copa-dark shrink-0 tabular-nums">
-                                      {pred.score1} × {pred.score2}
-                                    </span>
+                                    <div className="shrink-0 text-center tabular-nums" style={{ minWidth: 56 }}>
+                                      <div className="font-extrabold text-copa-dark">{pred.score1} × {pred.score2}</div>
+                                      {pred.game.score1 !== null && (
+                                        <div className="text-xs font-semibold" style={{ color: '#295A71' }}>
+                                          {pred.game.score1} × {pred.game.score2}
+                                        </div>
+                                      )}
+                                    </div>
                                     <span className="font-semibold text-copa-dark flex-1 flex items-center gap-1.5">
                                       {TEAM_ABBR[pred.game.team2] ?? pred.game.team2}
                                       <FlagImage team={pred.game.team2} size={16} />
@@ -661,11 +682,6 @@ export default function RankingPage() {
                                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: ptsBg, color: ptsColor }}>
                                       +{pts}pts
                                     </span>
-                                  )}
-                                  {pred.game.score1 !== null && (
-                                    <p className="text-xs text-center mt-1" style={{ color: '#295A71' }}>
-                                      Resultado: {pred.game.score1} × {pred.game.score2}
-                                    </p>
                                   )}
                                 </div>
                               </div>

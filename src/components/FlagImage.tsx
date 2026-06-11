@@ -70,6 +70,11 @@ interface FlagImageProps {
   className?: string
 }
 
+// Suíça tem bandeira quadrada (1:1); todas as outras seguem proporção 3:2
+function flagWidth(code: string, height: number): number {
+  return code === 'ch' ? height : Math.round(height * 1.5)
+}
+
 export default function FlagImage({ team, size = 40, className = '' }: FlagImageProps) {
   const code = FLAG_CODES[team]
   if (!code) return <span className="text-xl">🏳️</span>
@@ -78,9 +83,9 @@ export default function FlagImage({ team, size = 40, className = '' }: FlagImage
     <img
       src={`/flags/${code}.png`}
       alt={team}
-      width={size}
+      width={flagWidth(code, size)}
       height={size}
-      className={`rounded-sm object-cover ${className}`}
+      className={`rounded-sm ${className}`}
     />
   )
 }
