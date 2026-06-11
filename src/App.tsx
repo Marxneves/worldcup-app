@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from './hooks/useAuth'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -14,10 +15,47 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return user ? <>{children}</> : <Navigate to="/login" replace />
 }
 
-export default function App() {
+function useApiWakeup() {
+  const [sleeping, setSleeping] = useState(false)
+
   useEffect(() => {
-    api.get('/health').catch(() => {})
+    let cancelled = false
+
+    let didShowBanner = false
+
+    const wakeupTimer = setTimeout(() => {
+      if (!cancelled) {
+        didShowBanner = true
+        setSleeping(true)
+      }
+    }, 3000)
+
+    async function poll() {
+      while (!cancelled) {
+        try {
+          await api.get('/health', { timeout: 8000 })
+          clearTimeout(wakeupTimer)
+          if (!cancelled && didShowBanner) window.location.reload()
+          return
+        } catch {
+          await new Promise(r => setTimeout(r, 5000))
+        }
+      }
+    }
+
+    poll()
+
+    return () => {
+      cancelled = true
+      clearTimeout(wakeupTimer)
+    }
   }, [])
+
+  return sleeping
+}
+
+export default function App() {
+  const sleeping = useApiWakeup()
 
   return (
     <BrowserRouter>
@@ -31,6 +69,30 @@ export default function App() {
           <Route path="/admin" element={<PrivateRoute><AdminPage /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/pools" replace />} />
         </Routes>
+
+        <AnimatePresence>
+          {sleeping && (
+            <motion.div
+              className="fixed bottom-5 left-0 right-0 z-50 flex justify-center px-5"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div
+                className="max-w-md w-full rounded-2xl px-4 py-3 flex items-center gap-3 shadow-lg"
+                style={{ backgroundColor: '#1a1a1a', color: '#F5EDD0' }}
+              >
+                <span className="text-xl shrink-0">⏳</span>
+                <p className="text-sm leading-snug">
+                  O sistema está iniciando, aguenta mais{' '}
+                  <span className="font-bold text-copa-gold">~30 segundinhos!</span>{' '}
+                  A página vai recarregar sozinha quando estiver tudo pronto.
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </BrowserRouter>
   )
