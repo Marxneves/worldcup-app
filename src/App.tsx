@@ -30,7 +30,7 @@ function useApiWakeup() {
         try {
           await api.get('/health', { timeout: 8000 })
           clearTimeout(wakeupTimer)
-          if (!cancelled) setSleeping(false)
+          if (!cancelled) window.location.reload()
           return
         } catch {
           await new Promise(r => setTimeout(r, 5000))
@@ -80,9 +80,9 @@ export default function App() {
               >
                 <span className="text-xl shrink-0">⏳</span>
                 <p className="text-sm leading-snug">
-                  Servidor acordando — aguarde{' '}
-                  <span className="font-bold text-copa-gold">~30 segundos</span>{' '}
-                  para o bolão ficar disponível.
+                  O sistema está iniciando, aguenta mais{' '}
+                  <span className="font-bold text-copa-gold">~30 segundinhos!</span>{' '}
+                  A página vai recarregar sozinha quando estiver tudo pronto.
                 </p>
               </div>
             </motion.div>
