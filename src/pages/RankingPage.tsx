@@ -115,7 +115,7 @@ function GameCard({ game, dateStr, prediction, isAdmin, onSaveResult }: GameCard
       {prediction && game.score1 !== null && (
         <div className={`mt-2 text-center text-xs py-1 rounded-lg font-medium ${
           prediction.points === 3
-            ? 'bg-copa-green/15 text-copa-green'
+            ? 'bg-copa-menta/15 text-copa-menta'
             : prediction.points === 1
             ? 'bg-copa-gold/15 text-copa-gold'
             : 'bg-red-500/10 text-copa-red'
