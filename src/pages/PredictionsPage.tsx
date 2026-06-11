@@ -290,6 +290,8 @@ export default function PredictionsPage() {
     setLockError('')
     try {
       await api.post('/predictions/lock-all', { poolId: pool.id })
+      await queryClient.invalidateQueries({ queryKey: ['predictions', poolCode] })
+      await queryClient.invalidateQueries({ queryKey: ['ranking', poolCode] })
       navigate(`/ranking/${poolCode}`)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
