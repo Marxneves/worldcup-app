@@ -136,6 +136,8 @@ export default function PredictionsPage() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [lockError, setLockError] = useState('')
   const [locking, setLocking] = useState(false)
+  const [validating, setValidating] = useState(false)
+  const [syncError, setSyncError] = useState('')
   const [importing, setImporting] = useState(false)
   const [now, setNow] = useState(() => new Date())
   const queryClient = useQueryClient()
@@ -294,6 +296,60 @@ export default function PredictionsPage() {
       setLockError(msg || 'Erro ao confirmar palpites')
     } finally {
       setLocking(false)
+    }
+  }
+
+  async function handleClickConfirm() {
+    if (!pool) return
+    setValidating(true)
+    setSyncError('')
+
+    try {
+      const { data } = await api.get('/predictions', { params: { poolId: pool.id } })
+      const savedMap = new Map((data.predictions as Prediction[]).map((p: Prediction) => [p.gameId, p]))
+
+      const needsSync = openGames.filter(g => {
+        const [s1, s2] = scores[g.id] ?? ['', '']
+        if (s1 === '' || s2 === '') return false
+        const saved = savedMap.get(g.id)
+        if (!saved) return true
+        return saved.score1 !== Number(s1) || saved.score2 !== Number(s2)
+      })
+
+      if (needsSync.length > 0) {
+        await Promise.all(
+          needsSync.map(g => {
+            const [s1, s2] = scores[g.id]
+            return api.post('/predictions/save', {
+              poolId: pool.id, gameId: g.id,
+              score1: Number(s1), score2: Number(s2),
+            }).catch(() => null)
+          })
+        )
+
+        const { data: data2 } = await api.get('/predictions', { params: { poolId: pool.id } })
+        const savedMap2 = new Map((data2.predictions as Prediction[]).map((p: Prediction) => [p.gameId, p]))
+        const checkNow = new Date()
+        const stillUnsaved = openGames.filter(g => {
+          if (new Date(g.matchDate) <= checkNow) return false
+          const [s1, s2] = scores[g.id] ?? ['', '']
+          if (s1 === '' || s2 === '') return false
+          const saved = savedMap2.get(g.id)
+          return !saved || saved.score1 !== Number(s1) || saved.score2 !== Number(s2)
+        })
+
+        if (stillUnsaved.length > 0) {
+          setSyncError(`${stillUnsaved.length} palpite(s) não puderam ser salvos. Verifique sua conexão e tente novamente.`)
+          return
+        }
+      }
+
+      setShowConfirm(true)
+      window.scrollTo({ top: 0, behavior: 'instant' })
+    } catch {
+      setSyncError('Erro ao verificar seus palpites. Verifique sua conexão e tente novamente.')
+    } finally {
+      setValidating(false)
     }
   }
 
@@ -684,12 +740,18 @@ export default function PredictionsPage() {
             </div>
 
             {allFilled && !isAllLocked && (
-              <button
-                className="btn-primary mt-2"
-                onClick={() => { setShowConfirm(true); window.scrollTo({ top: 0, behavior: 'instant' }) }}
-              >
-                🏆 Confirmar todos os palpites
-              </button>
+              <div className="mt-2 space-y-2">
+                {syncError && (
+                  <p className="text-copa-red text-sm text-center font-semibold">{syncError}</p>
+                )}
+                <button
+                  className="btn-primary"
+                  onClick={handleClickConfirm}
+                  disabled={validating}
+                >
+                  {validating ? '⏳ Verificando palpites...' : '🏆 Confirmar todos os palpites'}
+                </button>
+              </div>
             )}
           </motion.div>
         </AnimatePresence>
