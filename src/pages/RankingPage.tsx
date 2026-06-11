@@ -425,34 +425,29 @@ export default function RankingPage() {
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <tbody>
                           <tr>
-                            <td style={{ textAlign: 'right', width: '40%', paddingRight: 8, verticalAlign: 'middle' }}>
-                              <img
-                                src={`/flags/${FLAG_CODES[game.team1]}.png`}
-                                alt={game.team1}
-                                width={20}
-                                height={20}
-                                style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
-                              />
-                              <span style={{ fontWeight: 700, color: '#1a1a1a', fontSize: 14, verticalAlign: 'middle' }}>
+                            {/* time 1: bandeira em célula própria */}
+                            <td style={{ width: 24, verticalAlign: 'middle', paddingRight: 4 }}>
+                              <img src={`/flags/${FLAG_CODES[game.team1]}.png`} alt="" width={20} height={14} style={{ display: 'block' }} />
+                            </td>
+                            <td style={{ textAlign: 'right', verticalAlign: 'middle', paddingRight: 10 }}>
+                              <span style={{ fontWeight: 700, color: '#1a1a1a', fontSize: 14 }}>
                                 {TEAM_ABBR[game.team1] ?? game.team1}
                               </span>
                             </td>
-                            <td style={{ textAlign: 'center', width: '20%', verticalAlign: 'middle' }}>
-                              <span style={{ fontSize: 20, fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>
+                            {/* placar */}
+                            <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 6px' }}>
+                              <span style={{ fontSize: 20, fontWeight: 900, color: '#1a1a1a' }}>
                                 {game.score1} × {game.score2}
                               </span>
                             </td>
-                            <td style={{ textAlign: 'left', width: '40%', paddingLeft: 8, verticalAlign: 'middle' }}>
-                              <span style={{ fontWeight: 700, color: '#1a1a1a', fontSize: 14, verticalAlign: 'middle' }}>
+                            {/* time 2 */}
+                            <td style={{ textAlign: 'left', verticalAlign: 'middle', paddingLeft: 10 }}>
+                              <span style={{ fontWeight: 700, color: '#1a1a1a', fontSize: 14 }}>
                                 {TEAM_ABBR[game.team2] ?? game.team2}
                               </span>
-                              <img
-                                src={`/flags/${FLAG_CODES[game.team2]}.png`}
-                                alt={game.team2}
-                                width={20}
-                                height={20}
-                                style={{ display: 'inline', verticalAlign: 'middle', marginLeft: 4 }}
-                              />
+                            </td>
+                            <td style={{ width: 24, verticalAlign: 'middle', paddingLeft: 4 }}>
+                              <img src={`/flags/${FLAG_CODES[game.team2]}.png`} alt="" width={20} height={14} style={{ display: 'block' }} />
                             </td>
                           </tr>
                         </tbody>
@@ -482,8 +477,8 @@ export default function RankingPage() {
                               <td style={{ padding: '10px 8px', fontSize: 14, color: '#475569', textAlign: 'center', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                                 {pred.score1 !== null ? `${pred.score1} × ${pred.score2}` : '—'}
                               </td>
-                              <td style={{ padding: '10px 16px', textAlign: 'right' }}>
-                                <span style={{ ...badgeStyle, fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 999 }}>
+                              <td style={{ paddingTop: 10, paddingBottom: 10, paddingRight: 16, paddingLeft: 8, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                <span style={{ ...badgeStyle, display: 'inline-block', fontSize: 12, fontWeight: 700, paddingTop: 3, paddingBottom: 3, paddingLeft: 8, paddingRight: 8, borderRadius: 4 }}>
                                   {pred.points === 3 ? '+3 pts' : pred.points === 1 ? '+1 pt' : '0 pts'}
                                 </span>
                               </td>
