@@ -117,7 +117,7 @@ function computeGroupStandings(
 function PtsTag({ points }: { points?: number | null }) {
   if (points === null || points === undefined) return null
   const bg = points === 3 ? 'rgba(0,254,168,0.15)' : points === 1 ? 'rgba(255,209,0,0.15)' : 'rgba(230,57,70,0.1)'
-  const color = points === 3 ? '#00FEA8' : points === 1 ? '#FFD100' : '#e63946'
+  const color = points === 3 ? '#295A71' : points === 1 ? '#FFD100' : '#e63946'
   return (
     <span className="text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: bg, color }}>
       +{points}pts

@@ -115,7 +115,7 @@ function GameCard({ game, dateStr, prediction, isAdmin, onSaveResult }: GameCard
       {prediction && game.score1 !== null && (
         <div className={`mt-2 text-center text-xs py-1 rounded-lg font-medium ${
           prediction.points === 3
-            ? 'bg-copa-menta/15 text-copa-menta'
+            ? 'bg-copa-menta/15 text-copa-teal'
             : prediction.points === 1
             ? 'bg-copa-gold/15 text-copa-gold'
             : 'bg-red-500/10 text-copa-red'
@@ -444,7 +444,7 @@ export default function RankingPage() {
                           {byGroup[group].map((pred, idx) => {
                             const pts = pred.game.score1 !== null ? pred.points : null
                             const ptsBg = pts === 3 ? 'rgba(0,254,168,0.15)' : pts === 1 ? 'rgba(255,209,0,0.15)' : 'rgba(230,57,70,0.1)'
-                            const ptsColor = pts === 3 ? '#00FEA8' : pts === 1 ? '#FFD100' : '#e63946'
+                            const ptsColor = pts === 3 ? '#295A71' : pts === 1 ? '#FFD100' : '#e63946'
                             return (
                               <div key={pred.id}>
                                 {idx > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}
