@@ -21,34 +21,29 @@ function useApiWakeup() {
   useEffect(() => {
     let cancelled = false
 
-    let didShowBanner = false
-
-    const wakeupTimer = setTimeout(() => {
-      if (!cancelled) {
-        didShowBanner = true
-        setSleeping(true)
-      }
-    }, 3000)
-
-    async function poll() {
-      while (!cancelled) {
-        try {
-          await api.get('/health', { timeout: 8000 })
-          clearTimeout(wakeupTimer)
-          if (!cancelled && didShowBanner) window.location.reload()
-          return
-        } catch {
+    async function check() {
+      try {
+        await api.get('/health', { timeout: 10000 })
+        // API respondeu — estava acordada, nada a fazer
+      } catch {
+        // API não respondeu — está dormindo
+        if (!cancelled) setSleeping(true)
+        while (!cancelled) {
           await new Promise(r => setTimeout(r, 5000))
+          try {
+            await api.get('/health', { timeout: 10000 })
+            if (!cancelled) window.location.reload()
+            return
+          } catch {
+            // ainda dormindo, continua polling
+          }
         }
       }
     }
 
-    poll()
+    check()
 
-    return () => {
-      cancelled = true
-      clearTimeout(wakeupTimer)
-    }
+    return () => { cancelled = true }
   }, [])
 
   return sleeping
