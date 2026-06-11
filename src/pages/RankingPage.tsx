@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { RankingEntry, Game, Prediction, Pool } from '../types'
@@ -19,9 +19,32 @@ interface GameCardProps {
   game: Game
   dateStr?: string
   prediction?: Prediction
+  isAdmin?: boolean
+  onSaveResult?: (gameNumber: number, score1: number, score2: number) => Promise<void>
 }
 
-function GameCard({ game, dateStr, prediction }: GameCardProps) {
+function GameCard({ game, dateStr, prediction, isAdmin, onSaveResult }: GameCardProps) {
+  const [editing, setEditing] = useState(false)
+  const [editScore1, setEditScore1] = useState(game.score1 !== null ? String(game.score1) : '')
+  const [editScore2, setEditScore2] = useState(game.score2 !== null ? String(game.score2) : '')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  async function handleSave() {
+    if (!onSaveResult || editScore1 === '' || editScore2 === '') return
+    setSaving(true)
+    setSaveError('')
+    try {
+      await onSaveResult(game.number, Number(editScore1), Number(editScore2))
+      setEditing(false)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setSaveError(msg || 'Erro ao salvar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="card p-3">
       {dateStr && (
@@ -41,11 +64,58 @@ function GameCard({ game, dateStr, prediction }: GameCardProps) {
           <span className="text-sm font-semibold text-copa-dark">{TEAM_ABBR[game.team2] ?? game.team2}</span>
           <FlagImage team={game.team2} size={22} className="shrink-0" />
         </div>
+        {isAdmin && !editing && (
+          <button
+            onClick={() => setEditing(true)}
+            className="ml-1 text-xs text-slate-400 hover:text-copa-gold transition-colors"
+            title="Editar resultado"
+          >
+            ✏️
+          </button>
+        )}
       </div>
+
+      {editing && (
+        <div className="mt-3 pt-3 border-t border-copa-border">
+          <div className="flex items-center gap-2 justify-center">
+            <input
+              type="number"
+              min="0"
+              value={editScore1}
+              onChange={e => setEditScore1(e.target.value)}
+              className="score-input w-12 h-10 text-center text-lg font-bold rounded-xl"
+            />
+            <span className="text-slate-600 font-bold">×</span>
+            <input
+              type="number"
+              min="0"
+              value={editScore2}
+              onChange={e => setEditScore2(e.target.value)}
+              className="score-input w-12 h-10 text-center text-lg font-bold rounded-xl"
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving || editScore1 === '' || editScore2 === ''}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold transition-opacity"
+              style={{ backgroundColor: '#FFD100', color: '#1a1a1a', opacity: saving ? 0.6 : 1 }}
+            >
+              {saving ? '...' : 'Salvar'}
+            </button>
+            <button
+              onClick={() => { setEditing(false); setSaveError('') }}
+              className="text-slate-400 text-xs"
+            >
+              Cancelar
+            </button>
+          </div>
+          {saveError && <p className="text-copa-red text-xs text-center mt-1">{saveError}</p>}
+        </div>
+      )}
+
       {prediction && game.score1 !== null && (
         <div className={`mt-2 text-center text-xs py-1 rounded-lg font-medium ${
           prediction.points === 3
-            ? 'bg-copa-green/15 text-copa-green'
+            ? 'bg-copa-menta/15 text-copa-teal'
             : prediction.points === 1
             ? 'bg-copa-gold/15 text-copa-gold'
             : 'bg-red-500/10 text-copa-red'
@@ -70,6 +140,14 @@ export default function RankingPage() {
   const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null)
   const [upcomingExpanded, setUpcomingExpanded] = useState(true)
   const [resultsExpanded, setResultsExpanded] = useState(true)
+
+  const queryClient = useQueryClient()
+
+  async function handleSaveResult(gameNumber: number, score1: number, score2: number) {
+    await api.post('/admin/results', { gameNumber, score1, score2 })
+    await queryClient.invalidateQueries({ queryKey: ['games'] })
+    await queryClient.invalidateQueries({ queryKey: ['ranking', poolCode] })
+  }
 
   const { data: rankingData, isLoading: rankingLoading } = useQuery({
     queryKey: ['ranking', poolCode],
@@ -268,6 +346,8 @@ export default function RankingPage() {
                           game={game}
                           dateStr={dateStr}
                           prediction={prediction}
+                          isAdmin={user?.isAdmin}
+                          onSaveResult={handleSaveResult}
                         />
                       )
                     })}
@@ -294,6 +374,8 @@ export default function RankingPage() {
                           key={game.id}
                           game={game}
                           prediction={prediction}
+                          isAdmin={user?.isAdmin}
+                          onSaveResult={handleSaveResult}
                         />
                       )
                     })}
@@ -362,7 +444,7 @@ export default function RankingPage() {
                           {byGroup[group].map((pred, idx) => {
                             const pts = pred.game.score1 !== null ? pred.points : null
                             const ptsBg = pts === 3 ? 'rgba(0,254,168,0.15)' : pts === 1 ? 'rgba(255,209,0,0.15)' : 'rgba(230,57,70,0.1)'
-                            const ptsColor = pts === 3 ? '#00FEA8' : pts === 1 ? '#FFD100' : '#e63946'
+                            const ptsColor = pts === 3 ? '#295A71' : pts === 1 ? '#FFD100' : '#e63946'
                             return (
                               <div key={pred.id}>
                                 {idx > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}

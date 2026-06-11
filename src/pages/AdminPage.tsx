@@ -130,7 +130,7 @@ export default function AdminPage() {
 
         {feedback && (
           <motion.p
-            className="text-copa-green text-center font-semibold"
+            className="text-copa-menta text-center font-semibold"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
@@ -151,8 +151,8 @@ export default function AdminPage() {
         <div className="card p-5">
           <h2 className="font-bold text-copa-dark mb-3">Status dos jogos</h2>
           <div className="flex gap-4 text-center mb-4">
-            <div className="flex-1 bg-copa-green/10 rounded-xl p-3">
-              <p className="text-2xl font-extrabold text-copa-green">{finishedGames.length}</p>
+            <div className="flex-1 bg-copa-menta/10 rounded-xl p-3">
+              <p className="text-2xl font-extrabold text-copa-menta">{finishedGames.length}</p>
               <p className="text-xs text-slate-600">com resultado</p>
             </div>
             <div className="flex-1 bg-slate-800 rounded-xl p-3">
