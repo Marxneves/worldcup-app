@@ -21,7 +21,7 @@ function LockIcon() {
 
 function ShareIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'middle' }}>
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M8 2v9" />
       <path d="M5 5l3-3 3 3" />
       <path d="M3 11v2a1 1 0 001 1h8a1 1 0 001-1v-2" />
@@ -412,9 +412,10 @@ export default function RankingPage() {
               <button
                 onClick={handleShare}
                 disabled={sharing || summaryLoading || !summaryData || summaryData.games.length === 0}
-                className="flex items-center gap-1.5 bg-copa-teal text-white text-sm font-semibold px-4 py-1.5 rounded-xl disabled:opacity-50"
+                className="text-copa-teal disabled:opacity-40 transition-opacity p-1"
+                style={{ background: 'none', border: 'none' }}
               >
-                {sharing ? '...' : <ShareIcon />}
+                <ShareIcon />
               </button>
             </div>
 
@@ -585,7 +586,7 @@ export default function RankingPage() {
                   className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
                   onClick={() => setUpcomingExpanded(v => !v)}
                 >
-                  <span>Próximos jogos <span style={{ color: isBrazilDay ? '#000080' : undefined }} className="text-copa-gold">({upcomingGames.length})</span></span>
+                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Próximos jogos <span className="text-copa-gold" style={{ color: isBrazilDay ? '#000080' : undefined }}>({upcomingGames.length})</span></span>
                   <span className="text-base leading-none">{upcomingExpanded ? '▾' : '▸'}</span>
                 </button>
                 {upcomingExpanded && (
@@ -616,7 +617,7 @@ export default function RankingPage() {
                   className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
                   onClick={() => setResultsExpanded(v => !v)}
                 >
-                  <span>Resultados <span style={{ color: isBrazilDay ? '#000080' : undefined }} className="text-copa-gold">({finishedGames.length})</span></span>
+                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Resultados <span className="text-copa-gold" style={{ color: isBrazilDay ? '#000080' : undefined }}>({finishedGames.length})</span></span>
                   <span className="text-base leading-none">{resultsExpanded ? '▾' : '▸'}</span>
                 </button>
                 {resultsExpanded && (

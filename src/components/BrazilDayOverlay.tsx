@@ -1,37 +1,33 @@
-import { useEffect, useState } from 'react'
-
 type Particle = {
   id: number
   x: number
   size: number
   duration: number
   delay: number
+  iterations: number
   color: string
 }
 
 const COLORS = ['#FFDF00', '#FFDF00', '#FFDF00', '#009C3B', '#009C3B', '#002776']
+const TOTAL_SECONDS = 20
 
-const particles: Particle[] = Array.from({ length: 22 }, (_, i) => ({
-  id: i,
-  x: Math.random() * 94 + 1,
-  size: 7 + (i % 4) * 2.5,
-  duration: 5 + (i % 6) * 1.2,
-  delay: i * 0.25,
-  color: COLORS[i % COLORS.length],
-}))
+const particles: Particle[] = Array.from({ length: 22 }, (_, i) => {
+  const duration = 5 + (i % 6) * 1.2
+  const delay = i * 0.25
+  // Each particle runs only enough iterations to fill ~20s, then stops naturally
+  const iterations = Math.max(1, Math.ceil((TOTAL_SECONDS - delay) / duration))
+  return {
+    id: i,
+    x: Math.random() * 94 + 1,
+    size: 7 + (i % 4) * 2.5,
+    duration,
+    delay,
+    iterations,
+    color: COLORS[i % COLORS.length],
+  }
+})
 
 export default function BrazilDayOverlay() {
-  const [opacity, setOpacity] = useState(1)
-  const [gone, setGone] = useState(false)
-
-  useEffect(() => {
-    const fadeTimer = setTimeout(() => setOpacity(0), 19000)
-    const removeTimer = setTimeout(() => setGone(true), 20000)
-    return () => { clearTimeout(fadeTimer); clearTimeout(removeTimer) }
-  }, [])
-
-  if (gone) return null
-
   return (
     <div
       style={{
@@ -40,8 +36,6 @@ export default function BrazilDayOverlay() {
         pointerEvents: 'none',
         zIndex: 30,
         overflow: 'hidden',
-        opacity,
-        transition: 'opacity 1s linear',
       }}
     >
       {particles.map(p => (
@@ -56,7 +50,7 @@ export default function BrazilDayOverlay() {
             backgroundColor: p.color,
             transform: 'rotate(45deg)',
             opacity: 0,
-            animation: `brazil-fall ${p.duration}s ${p.delay}s linear infinite`,
+            animation: `brazil-fall ${p.duration}s ${p.delay}s linear ${p.iterations}`,
           }}
         />
       ))}
