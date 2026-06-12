@@ -296,16 +296,14 @@ export default function RankingPage() {
           >
             📅 Jogos
           </button>
-          {user?.isAdmin && (
-            <button
-              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                activeTab === 'summary' ? 'bg-copa-gold text-copa-dark' : 'text-slate-600'
-              }`}
-              onClick={() => setActiveTab('summary')}
-            >
-              📊 Resumo
-            </button>
-          )}
+          <button
+            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
+              activeTab === 'summary' ? 'bg-copa-gold text-copa-dark' : 'text-slate-600'
+            }`}
+            onClick={() => setActiveTab('summary')}
+          >
+            📊 Resumo
+          </button>
         </div>
       </div>
 
@@ -388,7 +386,7 @@ export default function RankingPage() {
               <input
                 type="date"
                 value={summaryDate}
-                max={todayBRT}
+
                 onChange={e => setSummaryDate(e.target.value)}
                 className="text-sm border border-copa-border rounded-lg px-3 py-1.5 bg-white text-copa-dark"
               />
@@ -429,7 +427,7 @@ export default function RankingPage() {
               <div ref={summaryRef} style={{ backgroundColor: '#F5EDD0', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {summaryData.games.length === 0 && (
                   <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, padding: '24px 16px', textAlign: 'center', color: '#64748b', fontSize: 14 }}>
-                    Nenhum jogo com resultado nessa data.
+                    Nenhum jogo nessa data.
                   </div>
                 )}
 
@@ -467,7 +465,7 @@ export default function RankingPage() {
                           </span>
                         </td>
                         <td style={{ textAlign: 'center', paddingTop: 10, paddingBottom: 10, paddingLeft: 6, paddingRight: 6, width: 80, whiteSpace: 'nowrap', fontSize: 22, fontWeight: 900, color: '#1a1a1a' }}>
-                          {game.score1} × {game.score2}
+                          {game.score1 !== null ? `${game.score1} × ${game.score2}` : '—'}
                         </td>
                         <td style={{ textAlign: 'left', paddingTop: 10, paddingBottom: 10, paddingLeft: 8, paddingRight: 16, whiteSpace: 'nowrap' }}>
                           <span style={{ fontWeight: 700, fontSize: 13, color: '#1a1a1a', verticalAlign: 'middle' }}>
@@ -487,7 +485,10 @@ export default function RankingPage() {
 
                       {/* Palpites — mesmas 3 colunas, placar alinha com o do jogo */}
                       {game.predictions.map((pred, idx) => {
-                        const bgColor = pred.points === 3 ? 'rgba(0,254,168,0.12)' : pred.points === 1 ? 'rgba(255,209,0,0.12)' : 'transparent'
+                        const hasResult = game.score1 !== null
+                        const bgColor = hasResult
+                          ? (pred.points === 3 ? 'rgba(0,254,168,0.12)' : pred.points === 1 ? 'rgba(255,209,0,0.12)' : 'transparent')
+                          : 'transparent'
                         const ptsColor = pred.points === 3 ? '#295A71' : pred.points === 1 ? '#B8960A' : '#e63946'
                         const firstName = pred.name.split(' ')[0]
                         return (
@@ -499,7 +500,7 @@ export default function RankingPage() {
                               {pred.score1 !== null ? `${pred.score1} × ${pred.score2}` : '—'}
                             </td>
                             <td style={{ paddingTop: 10, paddingBottom: 10, paddingLeft: 8, paddingRight: 16, fontSize: 13, fontWeight: 700, color: ptsColor, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                              {pred.points === 3 ? '+3 pts' : pred.points === 1 ? '+1 pt' : '0 pts'}
+                              {hasResult ? (pred.points === 3 ? '+3 pts' : pred.points === 1 ? '+1 pt' : '0 pts') : ''}
                             </td>
                           </tr>
                         )
