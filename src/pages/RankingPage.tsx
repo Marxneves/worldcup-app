@@ -65,7 +65,7 @@ function GameCard({ game, dateStr, prediction, isAdmin, onSaveResult }: GameCard
             className="ml-1 text-xs text-slate-400 hover:text-copa-gold transition-colors"
             title="Editar resultado"
           >
-            ✏️
+            editar
           </button>
         )}
       </div>
@@ -273,7 +273,7 @@ export default function RankingPage() {
               onClick={() => navigate(`/predictions/${poolCode}`)}
               className="text-xs bg-copa-gold/10 text-copa-gold border border-copa-gold/30 px-3 py-1.5 rounded-full font-semibold"
             >
-              {isAllLocked ? '🔒 Palpites' : filledCount === 0 ? '✏️ Preencher' : `✏️ ${filledCount}/${totalGames}`}
+              {isAllLocked ? 'Palpites' : filledCount === 0 ? 'Preencher' : `${filledCount}/${totalGames}`}
             </button>
             <button onClick={logout} className="text-slate-600 text-sm">Sair</button>
           </div>
@@ -286,7 +286,7 @@ export default function RankingPage() {
             }`}
             onClick={() => setActiveTab('ranking')}
           >
-            🏆 Ranking
+            Ranking
           </button>
           <button
             className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
@@ -294,7 +294,7 @@ export default function RankingPage() {
             }`}
             onClick={() => setActiveTab('games')}
           >
-            📅 Jogos
+            Jogos
           </button>
           <button
             className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
@@ -302,7 +302,7 @@ export default function RankingPage() {
             }`}
             onClick={() => setActiveTab('summary')}
           >
-            📊 Resumo
+            Resumo
           </button>
         </div>
       </div>
@@ -312,7 +312,6 @@ export default function RankingPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             {!isAllLocked && (
               <div className="card p-4 flex items-start gap-3 mb-4">
-                <span className="text-xl shrink-0">🔒</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-copa-dark font-bold text-sm">Confirme seus palpites</p>
                   <p className="text-slate-600 text-xs mt-0.5 leading-relaxed">
@@ -322,7 +321,7 @@ export default function RankingPage() {
                     onClick={() => navigate(`/predictions/${poolCode}`)}
                     className="mt-2 text-xs bg-copa-gold/10 text-copa-gold border border-copa-gold/30 px-3 py-1.5 rounded-full font-semibold"
                   >
-                    ✏️ Ir para palpites
+                    Ir para palpites
                   </button>
                 </div>
               </div>
@@ -388,14 +387,14 @@ export default function RankingPage() {
                 value={summaryDate}
 
                 onChange={e => setSummaryDate(e.target.value)}
-                className="text-sm border border-copa-border rounded-lg px-3 py-1.5 bg-white text-copa-dark"
+                className="text-sm border border-copa-border rounded-lg px-3 py-1.5 bg-copa-card text-copa-dark"
               />
               <button
                 onClick={handleShare}
                 disabled={sharing || summaryLoading || !summaryData || summaryData.games.length === 0}
                 className="flex items-center gap-1.5 bg-copa-teal text-white text-sm font-semibold px-4 py-1.5 rounded-xl disabled:opacity-50"
               >
-                {sharing ? '⏳' : '📤'} Compartilhar
+                {sharing ? 'Salvando...' : 'Compartilhar'}
               </button>
             </div>
 
@@ -403,7 +402,7 @@ export default function RankingPage() {
               <div className="flex gap-2 mb-4 flex-wrap">
                 <button
                   onClick={() => setSelectedGameNumber(null)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === null ? 'bg-copa-teal text-white border-copa-teal' : 'bg-white text-slate-600 border-copa-border'}`}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === null ? 'bg-copa-teal text-white border-copa-teal' : 'bg-copa-card text-copa-dark border-copa-border'}`}
                 >
                   Todos
                 </button>
@@ -411,7 +410,7 @@ export default function RankingPage() {
                   <button
                     key={g.number}
                     onClick={() => setSelectedGameNumber(g.number)}
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === g.number ? 'bg-copa-teal text-white border-copa-teal' : 'bg-white text-slate-600 border-copa-border'}`}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === g.number ? 'bg-copa-teal text-white border-copa-teal' : 'bg-copa-card text-copa-dark border-copa-border'}`}
                   >
                     Jogo {g.number}
                   </button>

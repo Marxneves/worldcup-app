@@ -612,7 +612,7 @@ export default function PredictionsPage() {
             {/* Game rows — cardzão único por grupo */}
             {isAllLocked && (
               <div className="text-center py-2 px-3 rounded-xl bg-copa-menta/10 border border-copa-menta/30 text-copa-teal text-sm font-semibold">
-                🔒 Palpites confirmados — somente visualização
+                Palpites confirmados — somente visualização
               </div>
             )}
 
@@ -751,7 +751,7 @@ export default function PredictionsPage() {
                   onClick={handleClickConfirm}
                   disabled={validating}
                 >
-                  {validating ? '⏳ Verificando palpites...' : '🏆 Confirmar todos os palpites'}
+                  {validating ? 'Verificando palpites...' : 'Confirmar todos os palpites'}
                 </button>
               </div>
             )}
