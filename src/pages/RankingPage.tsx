@@ -349,53 +349,105 @@ export default function RankingPage() {
             {rankingLoading ? (
               <div className="text-center text-slate-600 py-12">Carregando ranking...</div>
             ) : (
-              <div className="card overflow-hidden" style={{ borderRadius: 0 }}>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-copa-border">
-                      <th className="text-left px-4 py-2.5 text-xs text-slate-500 font-semibold w-10">#</th>
-                      <th className="text-left px-2 py-2.5 text-xs text-slate-500 font-semibold">Participante</th>
-                      <th className="text-center px-4 py-2.5 text-xs text-slate-500 font-semibold w-16">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rankingData?.rankings.map((entry) => {
-                      const hasFilledPredictions = entry.lockedCount > 0
-                      const canViewPredictions = isAllLocked && hasFilledPredictions
-                      return (
-                        <tr
-                          key={entry.userId}
-                          className={`border-t border-copa-border ${canViewPredictions ? 'cursor-pointer active:opacity-70' : 'cursor-default'} ${entry.userId === user?.id ? 'bg-copa-gold/5' : ''}`}
-                          onClick={() => { if (canViewPredictions) setSelectedEntry(entry) }}
-                        >
-                          <td className="px-4 py-3 font-extrabold text-copa-dark tabular-nums">{entry.position}º</td>
-                          <td className="px-2 py-3">
-                            <p className={`font-bold ${entry.userId === user?.id ? 'text-copa-gold' : 'text-copa-dark'}`}>
-                              {entry.name} {entry.userId === user?.id ? '(você)' : ''}
-                            </p>
-                            {hasFilledPredictions ? (
-                              <p className="text-xs text-slate-500 mt-0.5">
-                                {entry.exactScores} exato · {entry.correctResults} resultado certo
-                              </p>
-                            ) : (
-                              <p className="text-xs text-slate-400 mt-0.5 italic">Palpites não preenchidos</p>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {hasFilledPredictions && (
-                              <>
-                                <span className="text-xl font-extrabold text-copa-dark tabular-nums">{entry.totalPoints}</span>
-                                <span className="text-xs text-slate-500 ml-0.5">pts</span>
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+              <div className="card overflow-hidden" style={{ borderRadius: 16 }}>
+                {rankingData?.rankings.map((entry, index) => {
+                  const { rankings } = rankingData
+                  const isFirstInTieGroup = index === 0 || rankings[index - 1].position !== entry.position
+                  const isLastOfTop3 = entry.position <= 3 && (index === rankings.length - 1 || rankings[index + 1].position > 3)
+                  const hasFilledPredictions = entry.lockedCount > 0
+                  const canViewPredictions = isAllLocked && hasFilledPredictions
+                  const isMe = entry.userId === user?.id
+
+                  const MEDAL_COLORS = {
+                    1: { bg: '#FFD100', text: '#1a1a1a', border: 'rgba(255,209,0,0.75)', rowBg: 'rgba(255,209,0,0.08)' },
+                    2: { bg: '#94a3b8', text: '#fff',    border: 'rgba(148,163,184,0.5)', rowBg: 'rgba(148,163,184,0.07)' },
+                    3: { bg: '#c97c3a', text: '#fff',    border: 'rgba(180,83,9,0.45)',   rowBg: 'rgba(180,83,9,0.05)' },
+                  } as const
+                  const medal = MEDAL_COLORS[entry.position as 1 | 2 | 3]
+                  const isTop3 = !!medal
+
+                  return (
+                    <div
+                      key={entry.userId}
+                      className={canViewPredictions ? 'cursor-pointer active:opacity-70' : 'cursor-default'}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: isTop3 ? '13px 16px' : '9px 16px',
+                        background: medal
+                          ? isMe ? `rgba(${entry.position === 1 ? '255,209,0' : entry.position === 2 ? '148,163,184' : '180,83,9'},0.14)` : medal.rowBg
+                          : isMe ? 'rgba(255,209,0,0.05)' : 'transparent',
+                        borderLeft: medal ? `3px solid ${medal.border}` : '3px solid transparent',
+                        borderBottom: isLastOfTop3
+                          ? '2px solid rgb(var(--copa-border))'
+                          : '1px solid rgb(var(--copa-border) / 0.6)',
+                      }}
+                      onClick={() => { if (canViewPredictions) setSelectedEntry(entry) }}
+                    >
+                      {/* Badge de posição */}
+                      {isTop3 && isFirstInTieGroup ? (
+                        <div style={{
+                          width: 30, height: 30, borderRadius: '50%',
+                          background: medal.bg, flexShrink: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <span style={{ fontSize: 13, fontWeight: 900, color: medal.text, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                            {entry.position}
+                          </span>
+                        </div>
+                      ) : (
+                        <div style={{ width: 30, flexShrink: 0, textAlign: 'center' }}>
+                          <span style={{
+                            fontSize: 13, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                            color: isTop3 ? medal!.bg : '#94a3b8',
+                          }}>
+                            {isFirstInTieGroup ? `${entry.position}º` : '—'}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Nome e estatísticas */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{
+                          fontWeight: 700,
+                          fontSize: isTop3 ? 15 : 14,
+                          color: isMe ? 'rgb(var(--copa-gold))' : 'rgb(var(--copa-dark))',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {entry.name}{isMe ? ' (você)' : ''}
+                        </p>
+                        {hasFilledPredictions ? (
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {entry.exactScores} exato · {entry.correctResults} resultado
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-400 mt-0.5 italic">Palpites não preenchidos</p>
+                        )}
+                      </div>
+
+                      {/* Pontuação */}
+                      {hasFilledPredictions && (
+                        <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                          <span style={{
+                            fontSize: isTop3 ? 22 : 18,
+                            fontWeight: 900,
+                            fontVariantNumeric: 'tabular-nums',
+                            color: 'rgb(var(--copa-dark))',
+                          }}>
+                            {entry.totalPoints}
+                          </span>
+                          <span className="text-xs text-slate-500 ml-0.5">pts</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
+            <p className="text-xs text-slate-400 text-center mt-3 px-2 leading-relaxed">
+              Desempate por placares exatos. Em caso de igualdade em pontos e placares exatos, os jogadores ficam na mesma posição.
+            </p>
           </motion.div>
         )}
 
@@ -550,10 +602,13 @@ export default function RankingPage() {
                           const moved = entry.movement
                           const movementIcon = moved > 0 ? '▲' : moved < 0 ? '▼' : ''
                           const movementColor = moved > 0 ? '#22c55e' : moved < 0 ? '#e63946' : 'transparent'
+                          const isFirstInTieGroup = idx === 0 || visibleRanking[idx - 1].position !== entry.position
                           return (
                             <tr key={entry.userId} style={{ borderTop: idx > 0 ? '1px solid #D9CBAD' : 'none' }}>
                               <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
-                                <span style={{ fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>{entry.position}º</span>
+                                <span style={{ fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>
+                                  {isFirstInTieGroup ? `${entry.position}º` : '—'}
+                                </span>
                                 {movementIcon && (
                                   <span style={{ fontSize: 10, fontWeight: 700, color: movementColor, marginLeft: 3 }}>{movementIcon}</span>
                                 )}
