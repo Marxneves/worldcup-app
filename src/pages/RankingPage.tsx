@@ -9,6 +9,24 @@ import { RankingEntry, Game, Prediction, Pool, DailySummary } from '../types'
 import FlagImage, { TEAM_ABBR, FLAG_CODES } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
 
+function LockIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'middle' }}>
+      <rect x="2" y="8" width="12" height="7" rx="1.5" />
+      <path d="M5 8V5.5a3 3 0 016 0V8" />
+    </svg>
+  )
+}
+
+function ShareIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'middle' }}>
+      <path d="M8 2v9" />
+      <path d="M5 5l3-3 3 3" />
+      <path d="M3 11v2a1 1 0 001 1h8a1 1 0 001-1v-2" />
+    </svg>
+  )
+}
 
 interface GameCardProps {
   game: Game
@@ -273,7 +291,7 @@ export default function RankingPage() {
               onClick={() => navigate(`/predictions/${poolCode}`)}
               className="text-xs bg-copa-gold/10 text-copa-gold border border-copa-gold/30 px-3 py-1.5 rounded-full font-semibold"
             >
-              {isAllLocked ? 'Palpites' : filledCount === 0 ? 'Preencher' : `${filledCount}/${totalGames}`}
+              {isAllLocked ? <span className="flex items-center gap-1"><LockIcon /> Palpites</span> : filledCount === 0 ? 'Preencher' : `${filledCount}/${totalGames}`}
             </button>
             <button onClick={logout} className="text-slate-600 text-sm">Sair</button>
           </div>
@@ -394,7 +412,7 @@ export default function RankingPage() {
                 disabled={sharing || summaryLoading || !summaryData || summaryData.games.length === 0}
                 className="flex items-center gap-1.5 bg-copa-teal text-white text-sm font-semibold px-4 py-1.5 rounded-xl disabled:opacity-50"
               >
-                {sharing ? 'Salvando...' : 'Compartilhar'}
+                {sharing ? 'Salvando...' : <><ShareIcon /> Compartilhar</>}
               </button>
             </div>
 

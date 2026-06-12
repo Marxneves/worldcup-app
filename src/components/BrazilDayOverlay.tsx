@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 type Particle = {
   id: number
   x: number
@@ -9,20 +11,27 @@ type Particle = {
 
 const COLORS = ['#FFDF00', '#FFDF00', '#FFDF00', '#009C3B', '#009C3B', '#002776']
 
-function generateParticles(count: number): Particle[] {
-  return Array.from({ length: count }, (_, i) => ({
-    id: i,
-    x: (i / count) * 98 + Math.sin(i * 2.4) * 4,
-    size: 7 + (i % 4) * 2.5,
-    duration: 5 + (i % 6) * 1.2,
-    delay: i * 0.25,
-    color: COLORS[i % COLORS.length],
-  }))
-}
-
-const particles = generateParticles(22)
+const particles: Particle[] = Array.from({ length: 22 }, (_, i) => ({
+  id: i,
+  x: (i / 22) * 98 + Math.sin(i * 2.4) * 4,
+  size: 7 + (i % 4) * 2.5,
+  duration: 5 + (i % 6) * 1.2,
+  delay: i * 0.25,
+  color: COLORS[i % COLORS.length],
+}))
 
 export default function BrazilDayOverlay() {
+  const [opacity, setOpacity] = useState(1)
+  const [gone, setGone] = useState(false)
+
+  useEffect(() => {
+    const fadeTimer = setTimeout(() => setOpacity(0), 9000)
+    const removeTimer = setTimeout(() => setGone(true), 10000)
+    return () => { clearTimeout(fadeTimer); clearTimeout(removeTimer) }
+  }, [])
+
+  if (gone) return null
+
   return (
     <div
       style={{
@@ -31,6 +40,8 @@ export default function BrazilDayOverlay() {
         pointerEvents: 'none',
         zIndex: 30,
         overflow: 'hidden',
+        opacity,
+        transition: 'opacity 1s linear',
       }}
     >
       {particles.map(p => (
