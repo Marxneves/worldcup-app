@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from './hooks/useAuth'
+import { useBrazilDay } from './hooks/useBrazilDay'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import PoolsPage from './pages/PoolsPage'
 import PredictionsPage from './pages/PredictionsPage'
 import RankingPage from './pages/RankingPage'
 import AdminPage from './pages/AdminPage'
+import BrazilDayOverlay from './components/BrazilDayOverlay'
 import api from './services/api'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -24,9 +26,7 @@ function useApiWakeup() {
     async function check() {
       try {
         await api.get('/health', { timeout: 10000 })
-        // API respondeu — estava acordada, nada a fazer
       } catch {
-        // API não respondeu — está dormindo
         if (!cancelled) setSleeping(true)
         while (!cancelled) {
           await new Promise(r => setTimeout(r, 5000))
@@ -35,7 +35,7 @@ function useApiWakeup() {
             if (!cancelled) window.location.reload()
             return
           } catch {
-            // ainda dormindo, continua polling
+            // still sleeping
           }
         }
       }
@@ -51,10 +51,13 @@ function useApiWakeup() {
 
 export default function App() {
   const sleeping = useApiWakeup()
+  const isBrazilDay = useBrazilDay()
 
   return (
     <BrowserRouter>
-      <div className="min-h-full max-w-md mx-auto">
+      <div className={`min-h-full max-w-md mx-auto${isBrazilDay ? ' brazil-day' : ''}`}>
+        {isBrazilDay && <BrazilDayOverlay />}
+
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />

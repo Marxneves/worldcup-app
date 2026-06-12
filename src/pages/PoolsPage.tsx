@@ -67,7 +67,7 @@ function PoolCard({ pool, onLeave, onNavigate, isLeaving }: PoolCardProps) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: '#F5EDD0',
+              backgroundColor: 'rgb(var(--copa-cream))',
             }}
           >
             <button

@@ -250,7 +250,7 @@ export default function RankingPage() {
   return (
     <div className="min-h-screen pb-8">
       {/* Header */}
-      <div className="px-5 pt-6 pb-4 sticky top-0 z-10 border-b border-copa-border" style={{ backgroundColor: '#F5EDD0' }}>
+      <div className="px-5 pt-6 pb-4 sticky top-0 z-10 border-b border-copa-border bg-copa-cream">
         <div className="flex justify-between items-center mb-4">
           <div>
             <button
@@ -634,7 +634,7 @@ export default function RankingPage() {
           >
             <motion.div
               className="rounded-t-3xl p-5 pb-10 max-h-[85vh] overflow-y-auto"
-              style={{ backgroundColor: '#F5EDD0' }}
+              style={{ backgroundColor: 'rgb(var(--copa-cream))' }}
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
