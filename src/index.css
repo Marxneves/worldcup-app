@@ -3,10 +3,50 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --copa-dark:   26 26 26;
+    --copa-card:   255 253 245;
+    --copa-border: 217 203 173;
+    --copa-gold:   255 209 0;
+    --copa-canary: 229 206 117;
+    --copa-menta:  0 254 168;
+    --copa-teal:   41 90 113;
+    --copa-royal:  39 76 163;
+    --copa-red:    230 57 70;
+    --copa-cream:  245 237 208;
+  }
+
+  /* Brazil day: green bg, Brazilian yellow accent, cream text on surfaces */
+  .brazil-day {
+    --copa-cream:  6 58 30;
+    --copa-gold:   255 223 0;
+    --copa-dark:   245 237 208;
+    --copa-border: 20 90 50;
+  }
+
+  /* Cards stay cream — restore dark text and golden border */
+  .brazil-day .card {
+    --copa-dark: 26 26 26;
+    border-color: rgb(255 223 0 / 0.3);
+  }
+
+  /* Gold backgrounds and primary buttons need dark text for contrast */
+  .brazil-day .bg-copa-gold,
+  .brazil-day .btn-primary {
+    --copa-dark: 26 26 26;
+  }
+
+
+  /* Elements with light backgrounds: restore dark text */
+  .brazil-day .bg-white,
+  .brazil-day .bg-copa-card,
+  .brazil-day input,
+  .brazil-day select { --copa-dark: 26 26 26; }
+
   html, body, #root {
     height: 100%;
-    background-color: #F5EDD0;
-    color: #1a1a1a;
+    background-color: rgb(var(--copa-cream));
+    color: rgb(var(--copa-dark));
   }
 
   input[type="number"]::-webkit-inner-spin-button,
@@ -22,7 +62,7 @@
 
 .login-phone-input::placeholder,
 .login-input::placeholder {
-  color: #F5EDD0;
+  color: rgb(var(--copa-cream));
   opacity: 1;
 }
 
@@ -39,33 +79,52 @@
 
   .input-field {
     width: 100%;
-    background-color: #FFFDF5;
-    border: 1px solid #D9CBAD;
+    background-color: rgb(var(--copa-card));
+    border: 1px solid rgb(var(--copa-border));
     border-radius: 1rem;
     padding: 1rem 1.25rem;
-    color: #1a1a1a;
+    color: rgb(var(--copa-dark));
     font-size: 1rem;
     outline: none;
     transition: border-color 0.15s;
   }
   .input-field::placeholder { color: #9ca3af; }
-  .input-field:focus { border-color: rgba(255, 209, 0, 0.6); }
+  .input-field:focus { border-color: rgb(var(--copa-gold) / 0.6); }
 
   .score-input {
-    background-color: #FFFDF5;
-    border: 2px solid #D9CBAD;
-    color: #1a1a1a;
+    background-color: rgb(var(--copa-card));
+    border: 2px solid rgb(var(--copa-border));
+    color: rgb(var(--copa-dark));
     outline: none;
     transition: border-color 0.15s;
   }
 
   .score-input:focus {
-    border-color: #FFD100;
+    border-color: rgb(var(--copa-gold));
   }
 
   .card {
-    background-color: #FFFDF5;
-    border: 1px solid #D9CBAD;
+    background-color: rgb(var(--copa-card));
+    border: 1px solid rgb(var(--copa-border));
     border-radius: 1.5rem;
   }
 }
+
+@keyframes brazil-fall {
+  0%   { transform: translateY(0)     rotate(45deg); opacity: 0; }
+  8%   { opacity: 0.7; }
+  92%  { opacity: 0.55; }
+  100% { transform: translateY(115vh) rotate(45deg); opacity: 0; }
+}
+
+/* Fora de @layer para sobrescrever utilidades do Tailwind */
+.brazil-day .text-slate-600 { color: rgb(245, 237, 208); }
+.brazil-day .text-slate-500 { color: rgba(245, 237, 208, 0.8); }
+.brazil-day .text-slate-400 { color: rgba(245, 237, 208, 0.65); }
+
+.brazil-day .card .text-slate-600,
+.brazil-day .bg-copa-card .text-slate-600 { color: #475569; }
+.brazil-day .card .text-slate-500,
+.brazil-day .bg-copa-card .text-slate-500 { color: #64748b; }
+.brazil-day .card .text-slate-400,
+.brazil-day .bg-copa-card .text-slate-400 { color: #94a3b8; }

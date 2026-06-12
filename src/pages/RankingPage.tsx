@@ -5,10 +5,29 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import domtoimage from 'dom-to-image-more'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
+import { useBrazilDay } from '../hooks/useBrazilDay'
 import { RankingEntry, Game, Prediction, Pool, DailySummary } from '../types'
 import FlagImage, { TEAM_ABBR, FLAG_CODES } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
 
+function LockIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'middle' }}>
+      <rect x="2" y="8" width="12" height="7" rx="1.5" />
+      <path d="M5 8V5.5a3 3 0 016 0V8" />
+    </svg>
+  )
+}
+
+function ShareIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 2v9" />
+      <path d="M5 5l3-3 3 3" />
+      <path d="M3 11v2a1 1 0 001 1h8a1 1 0 001-1v-2" />
+    </svg>
+  )
+}
 
 interface GameCardProps {
   game: Game
@@ -65,7 +84,7 @@ function GameCard({ game, dateStr, prediction, isAdmin, onSaveResult }: GameCard
             className="ml-1 text-xs text-slate-400 hover:text-copa-gold transition-colors"
             title="Editar resultado"
           >
-            ✏️
+            editar
           </button>
         )}
       </div>
@@ -131,6 +150,7 @@ export default function RankingPage() {
   const { poolCode } = useParams<{ poolCode: string }>()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const isBrazilDay = useBrazilDay()
   const [activeTab, setActiveTab] = useState<'ranking' | 'games' | 'summary'>('ranking')
   const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null)
   const [upcomingExpanded, setUpcomingExpanded] = useState(true)
@@ -250,7 +270,7 @@ export default function RankingPage() {
   return (
     <div className="min-h-screen pb-8">
       {/* Header */}
-      <div className="px-5 pt-6 pb-4 sticky top-0 z-10 border-b border-copa-border" style={{ backgroundColor: '#F5EDD0' }}>
+      <div className="px-5 pt-6 pb-4 sticky top-0 z-10 border-b border-copa-border bg-copa-cream">
         <div className="flex justify-between items-center mb-4">
           <div>
             <button
@@ -273,7 +293,7 @@ export default function RankingPage() {
               onClick={() => navigate(`/predictions/${poolCode}`)}
               className="text-xs bg-copa-gold/10 text-copa-gold border border-copa-gold/30 px-3 py-1.5 rounded-full font-semibold"
             >
-              {isAllLocked ? '🔒 Palpites' : filledCount === 0 ? '✏️ Preencher' : `✏️ ${filledCount}/${totalGames}`}
+              {isAllLocked ? <span className="flex items-center gap-1"><LockIcon /> Palpites</span> : filledCount === 0 ? 'Preencher' : `${filledCount}/${totalGames}`}
             </button>
             <button onClick={logout} className="text-slate-600 text-sm">Sair</button>
           </div>
@@ -286,7 +306,7 @@ export default function RankingPage() {
             }`}
             onClick={() => setActiveTab('ranking')}
           >
-            🏆 Ranking
+            Ranking
           </button>
           <button
             className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
@@ -294,7 +314,7 @@ export default function RankingPage() {
             }`}
             onClick={() => setActiveTab('games')}
           >
-            📅 Jogos
+            Jogos
           </button>
           <button
             className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
@@ -302,7 +322,7 @@ export default function RankingPage() {
             }`}
             onClick={() => setActiveTab('summary')}
           >
-            📊 Resumo
+            Resumo
           </button>
         </div>
       </div>
@@ -312,7 +332,6 @@ export default function RankingPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             {!isAllLocked && (
               <div className="card p-4 flex items-start gap-3 mb-4">
-                <span className="text-xl shrink-0">🔒</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-copa-dark font-bold text-sm">Confirme seus palpites</p>
                   <p className="text-slate-600 text-xs mt-0.5 leading-relaxed">
@@ -322,7 +341,7 @@ export default function RankingPage() {
                     onClick={() => navigate(`/predictions/${poolCode}`)}
                     className="mt-2 text-xs bg-copa-gold/10 text-copa-gold border border-copa-gold/30 px-3 py-1.5 rounded-full font-semibold"
                   >
-                    ✏️ Ir para palpites
+                    Ir para palpites
                   </button>
                 </div>
               </div>
@@ -388,14 +407,15 @@ export default function RankingPage() {
                 value={summaryDate}
 
                 onChange={e => setSummaryDate(e.target.value)}
-                className="text-sm border border-copa-border rounded-lg px-3 py-1.5 bg-white text-copa-dark"
+                className="text-sm border border-copa-border rounded-lg px-3 py-1.5 bg-copa-card text-copa-dark"
               />
               <button
                 onClick={handleShare}
                 disabled={sharing || summaryLoading || !summaryData || summaryData.games.length === 0}
-                className="flex items-center gap-1.5 bg-copa-teal text-white text-sm font-semibold px-4 py-1.5 rounded-xl disabled:opacity-50"
+                className="text-copa-teal disabled:opacity-40 transition-opacity p-1"
+                style={{ background: 'none', border: 'none' }}
               >
-                {sharing ? '⏳' : '📤'} Compartilhar
+                <ShareIcon />
               </button>
             </div>
 
@@ -403,7 +423,7 @@ export default function RankingPage() {
               <div className="flex gap-2 mb-4 flex-wrap">
                 <button
                   onClick={() => setSelectedGameNumber(null)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === null ? 'bg-copa-teal text-white border-copa-teal' : 'bg-white text-slate-600 border-copa-border'}`}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === null ? 'bg-copa-teal text-white border-copa-teal' : 'bg-copa-card text-copa-dark border-copa-border'}`}
                 >
                   Todos
                 </button>
@@ -411,7 +431,7 @@ export default function RankingPage() {
                   <button
                     key={g.number}
                     onClick={() => setSelectedGameNumber(g.number)}
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === g.number ? 'bg-copa-teal text-white border-copa-teal' : 'bg-white text-slate-600 border-copa-border'}`}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === g.number ? 'bg-copa-teal text-white border-copa-teal' : 'bg-copa-card text-copa-dark border-copa-border'}`}
                   >
                     Jogo {g.number}
                   </button>
@@ -563,11 +583,11 @@ export default function RankingPage() {
             {upcomingGames.length > 0 && (
               <div className="mb-4">
                 <button
-                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-slate-600 mb-3 py-1"
+                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
                   onClick={() => setUpcomingExpanded(v => !v)}
                 >
-                  <span>Próximos jogos <span className="text-copa-gold">({upcomingGames.length})</span></span>
-                  <span className="text-base leading-none">{upcomingExpanded ? '▾' : '▸'}</span>
+                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Próximos jogos <span className="text-copa-gold" style={{ color: isBrazilDay ? '#FFDF00' : undefined }}>({upcomingGames.length})</span></span>
+                  <span className="text-xl leading-none" style={{ color: isBrazilDay ? '#FFDF00' : undefined }}>{upcomingExpanded ? '▾' : '▸'}</span>
                 </button>
                 {upcomingExpanded && (
                   <div className="space-y-2">
@@ -594,11 +614,11 @@ export default function RankingPage() {
             {finishedGames.length > 0 && (
               <div>
                 <button
-                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-slate-600 mb-3 py-1"
+                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
                   onClick={() => setResultsExpanded(v => !v)}
                 >
-                  <span>Resultados <span className="text-copa-gold">({finishedGames.length})</span></span>
-                  <span className="text-base leading-none">{resultsExpanded ? '▾' : '▸'}</span>
+                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Resultados <span className="text-copa-gold" style={{ color: isBrazilDay ? '#FFDF00' : undefined }}>({finishedGames.length})</span></span>
+                  <span className="text-xl leading-none" style={{ color: isBrazilDay ? '#FFDF00' : undefined }}>{resultsExpanded ? '▾' : '▸'}</span>
                 </button>
                 {resultsExpanded && (
                   <div className="space-y-2">
@@ -634,7 +654,7 @@ export default function RankingPage() {
           >
             <motion.div
               className="rounded-t-3xl p-5 pb-10 max-h-[85vh] overflow-y-auto"
-              style={{ backgroundColor: '#F5EDD0' }}
+              style={{ backgroundColor: 'rgb(var(--copa-cream))' }}
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}

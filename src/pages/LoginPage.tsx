@@ -89,7 +89,7 @@ export default function LoginPage() {
   return (
     <div
       className="relative overflow-hidden"
-      style={{ backgroundColor: '#F5EDD0', height: '100dvh' }}
+      style={{ backgroundColor: 'rgb(var(--copa-cream))', height: '100dvh' }}
     >
       {/* Taça */}
       <div

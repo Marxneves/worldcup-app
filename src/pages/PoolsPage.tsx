@@ -67,7 +67,7 @@ function PoolCard({ pool, onLeave, onNavigate, isLeaving }: PoolCardProps) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: '#F5EDD0',
+              backgroundColor: 'rgb(var(--copa-cream))',
             }}
           >
             <button
@@ -164,7 +164,7 @@ export default function PoolsPage() {
     <div className="min-h-screen px-5 py-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-extrabold text-copa-dark">⚽ Meus Bolões</h1>
+          <h1 className="text-2xl font-extrabold text-copa-dark">Meus Bolões</h1>
           <p className="text-slate-600 text-sm mt-0.5">Olá, {user?.name}!</p>
         </div>
         <button onClick={logout} className="text-slate-600 text-sm">Sair</button>
@@ -199,7 +199,6 @@ export default function PoolsPage() {
               </div>
             ) : (
               <div className="text-center py-10">
-                <p className="text-4xl mb-3">🏆</p>
                 <p className="text-slate-600">Você ainda não está em nenhum bolão</p>
               </div>
             )}
@@ -260,7 +259,6 @@ export default function PoolsPage() {
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
               >
-                <p className="text-4xl mb-3">🎉</p>
                 <p className="text-copa-dark font-bold text-lg">{feedback}</p>
                 <p className="text-slate-600 text-sm mt-2">Compartilhe o código com sua família!</p>
               </motion.div>
