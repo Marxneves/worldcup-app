@@ -13,7 +13,7 @@ const COLORS = ['#FFDF00', '#FFDF00', '#FFDF00', '#009C3B', '#009C3B', '#002776'
 
 const particles: Particle[] = Array.from({ length: 22 }, (_, i) => ({
   id: i,
-  x: (i / 22) * 98 + Math.sin(i * 2.4) * 4,
+  x: Math.random() * 94 + 1,
   size: 7 + (i % 4) * 2.5,
   duration: 5 + (i % 6) * 1.2,
   delay: i * 0.25,
@@ -25,8 +25,8 @@ export default function BrazilDayOverlay() {
   const [gone, setGone] = useState(false)
 
   useEffect(() => {
-    const fadeTimer = setTimeout(() => setOpacity(0), 9000)
-    const removeTimer = setTimeout(() => setGone(true), 10000)
+    const fadeTimer = setTimeout(() => setOpacity(0), 19000)
+    const removeTimer = setTimeout(() => setGone(true), 20000)
     return () => { clearTimeout(fadeTimer); clearTimeout(removeTimer) }
   }, [])
 

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import domtoimage from 'dom-to-image-more'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
+import { useBrazilDay } from '../hooks/useBrazilDay'
 import { RankingEntry, Game, Prediction, Pool, DailySummary } from '../types'
 import FlagImage, { TEAM_ABBR, FLAG_CODES } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
@@ -149,6 +150,7 @@ export default function RankingPage() {
   const { poolCode } = useParams<{ poolCode: string }>()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const isBrazilDay = useBrazilDay()
   const [activeTab, setActiveTab] = useState<'ranking' | 'games' | 'summary'>('ranking')
   const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null)
   const [upcomingExpanded, setUpcomingExpanded] = useState(true)
@@ -412,7 +414,7 @@ export default function RankingPage() {
                 disabled={sharing || summaryLoading || !summaryData || summaryData.games.length === 0}
                 className="flex items-center gap-1.5 bg-copa-teal text-white text-sm font-semibold px-4 py-1.5 rounded-xl disabled:opacity-50"
               >
-                {sharing ? 'Salvando...' : <><ShareIcon /> Compartilhar</>}
+                {sharing ? '...' : <ShareIcon />}
               </button>
             </div>
 
@@ -580,10 +582,10 @@ export default function RankingPage() {
             {upcomingGames.length > 0 && (
               <div className="mb-4">
                 <button
-                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-slate-600 mb-3 py-1"
+                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
                   onClick={() => setUpcomingExpanded(v => !v)}
                 >
-                  <span>Próximos jogos <span className="text-copa-gold">({upcomingGames.length})</span></span>
+                  <span>Próximos jogos <span style={{ color: isBrazilDay ? '#000080' : undefined }} className="text-copa-gold">({upcomingGames.length})</span></span>
                   <span className="text-base leading-none">{upcomingExpanded ? '▾' : '▸'}</span>
                 </button>
                 {upcomingExpanded && (
@@ -611,10 +613,10 @@ export default function RankingPage() {
             {finishedGames.length > 0 && (
               <div>
                 <button
-                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-slate-600 mb-3 py-1"
+                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
                   onClick={() => setResultsExpanded(v => !v)}
                 >
-                  <span>Resultados <span className="text-copa-gold">({finishedGames.length})</span></span>
+                  <span>Resultados <span style={{ color: isBrazilDay ? '#000080' : undefined }} className="text-copa-gold">({finishedGames.length})</span></span>
                   <span className="text-base leading-none">{resultsExpanded ? '▾' : '▸'}</span>
                 </button>
                 {resultsExpanded && (
