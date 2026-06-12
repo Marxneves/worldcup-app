@@ -10,14 +10,20 @@ type Particle = {
 const COLORS = ['#FFDF00', '#FFDF00', '#FFDF00', '#009C3B', '#009C3B', '#002776']
 
 function generateParticles(count: number): Particle[] {
-  return Array.from({ length: count }, (_, i) => ({
-    id: i,
-    x: (i / count) * 98 + Math.sin(i * 2.4) * 4,
-    size: 7 + (i % 4) * 2.5,
-    duration: 5 + (i % 6) * 1.2,
-    delay: -(i * 0.4),
-    color: COLORS[i % COLORS.length],
-  }))
+  return Array.from({ length: count }, (_, i) => {
+    const duration = 5 + (i % 6) * 1.2
+    // Each particle starts between 10% and 90% through its own cycle
+    // so they are already spread across the screen on first render
+    const progress = 0.1 + (i / count) * 0.8
+    return {
+      id: i,
+      x: (i / count) * 98 + Math.sin(i * 2.4) * 4,
+      size: 7 + (i % 4) * 2.5,
+      duration,
+      delay: -(duration * progress),
+      color: COLORS[i % COLORS.length],
+    }
+  })
 }
 
 const particles = generateParticles(22)
