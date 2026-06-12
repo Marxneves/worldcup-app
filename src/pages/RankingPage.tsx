@@ -359,7 +359,7 @@ export default function RankingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rankingData?.rankings.map((entry, index) => {
+                    {rankingData?.rankings.map((entry) => {
                       const hasFilledPredictions = entry.lockedCount > 0
                       const canViewPredictions = isAllLocked && hasFilledPredictions
                       return (
@@ -368,7 +368,7 @@ export default function RankingPage() {
                           className={`border-t border-copa-border ${canViewPredictions ? 'cursor-pointer active:opacity-70' : 'cursor-default'} ${entry.userId === user?.id ? 'bg-copa-gold/5' : ''}`}
                           onClick={() => { if (canViewPredictions) setSelectedEntry(entry) }}
                         >
-                          <td className="px-4 py-3 font-extrabold text-copa-dark tabular-nums">{index + 1}º</td>
+                          <td className="px-4 py-3 font-extrabold text-copa-dark tabular-nums">{entry.position}º</td>
                           <td className="px-2 py-3">
                             <p className={`font-bold ${entry.userId === user?.id ? 'text-copa-gold' : 'text-copa-dark'}`}>
                               {entry.name} {entry.userId === user?.id ? '(você)' : ''}
