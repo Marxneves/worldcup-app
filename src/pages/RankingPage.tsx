@@ -661,9 +661,16 @@ export default function RankingPage() {
                       return null
                     }
 
+                    const outcomeOrder = (s1: number | null, s2: number | null) => {
+                      if (s1 === null || s2 === null) return 3
+                      if (s1 > s2) return 0
+                      if (s1 === s2) return 1
+                      return 2
+                    }
                     const sortedPredictions = [...game.predictions].sort((a, b) => {
-                      if (a.score1 === null && b.score1 !== null) return 1
-                      if (a.score1 !== null && b.score1 === null) return -1
+                      const outcomeA = outcomeOrder(a.score1, a.score2)
+                      const outcomeB = outcomeOrder(b.score1, b.score2)
+                      if (outcomeA !== outcomeB) return outcomeA - outcomeB
                       const ptsA = getEffectivePoints(a)
                       const ptsB = getEffectivePoints(b)
                       if (ptsA !== null && ptsB !== null && ptsA !== ptsB) return ptsB - ptsA
