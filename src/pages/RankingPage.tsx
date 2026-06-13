@@ -437,6 +437,60 @@ export default function RankingPage() {
     return applyStandardRanking(entries)
   }, [simulatorMode, activeData, simulatedScores])
 
+  const liveRanking = useMemo((): Array<DailySummaryRankingEntry & { position: number }> | null => {
+    if (!activeData || Object.keys(liveScores).length === 0) return null
+
+    const { games, ranking } = activeData
+
+    const entries = ranking.map(entry => {
+      const basePoints = entry.totalPoints - entry.todayPoints
+
+      let scopeExactScores = 0
+      games.forEach(game => {
+        if ((game.score1 as number | null) !== null) {
+          const pred = game.predictions.find(p => p.userId === entry.userId)
+          if (pred?.points === 3) scopeExactScores++
+        }
+      })
+      const baseExactScores = entry.exactScores - scopeExactScores
+
+      let liveTodayPoints = 0
+      let liveExactScores = baseExactScores
+
+      games.forEach(game => {
+        const pred = game.predictions.find(p => p.userId === entry.userId)
+        if (!pred || pred.score1 === null) return
+
+        if ((game.score1 as number | null) !== null) {
+          liveTodayPoints += pred.points ?? 0
+          if (pred.points === 3) liveExactScores++
+        } else {
+          const live = liveScores[game.number]
+          if (live) {
+            const pts = computeSimPoints(pred.score1!, pred.score2!, live.score1, live.score2)
+            liveTodayPoints += pts
+            if (pts === 3) liveExactScores++
+          }
+        }
+      })
+
+      return {
+        ...entry,
+        totalPoints: basePoints + liveTodayPoints,
+        todayPoints: liveTodayPoints,
+        exactScores: liveExactScores,
+        movement: 0,
+      }
+    })
+
+    entries.sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints
+      return b.exactScores - a.exactScores
+    })
+
+    return applyStandardRanking(entries)
+  }, [activeData, liveScores])
+
   return (
     <div className="min-h-screen pb-8">
       {/* Header */}
@@ -885,11 +939,14 @@ export default function RankingPage() {
                   })}
 
                   {visibleGames.length > 0 && !simulatorMode && (
-                    <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden' }}>
+                    <div style={{ backgroundColor: '#FFFDF5', border: `1px solid ${liveRanking ? '#e63946' : '#D9CBAD'}`, borderRadius: 0, overflow: 'hidden' }}>
                       <div style={{ borderBottom: '1px solid #D9CBAD', padding: '10px 16px' }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>
                           Ranking geral
                         </span>
+                        {liveRanking && (
+                          <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, color: '#e63946', letterSpacing: 0.5 }}>AO VIVO</span>
+                        )}
                       </div>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                         <thead>
@@ -901,11 +958,12 @@ export default function RankingPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {visibleRanking.map((entry, idx) => {
+                          {(liveRanking ?? visibleRanking).map((entry, idx) => {
                             const moved = entry.movement
                             const movementIcon = moved > 0 ? '▲' : moved < 0 ? '▼' : ''
                             const movementColor = moved > 0 ? '#22c55e' : moved < 0 ? '#e63946' : 'transparent'
-                            const isFirstInTieGroup = idx === 0 || visibleRanking[idx - 1].position !== entry.position
+                            const displayRanking = liveRanking ?? visibleRanking
+                            const isFirstInTieGroup = idx === 0 || displayRanking[idx - 1].position !== entry.position
                             return (
                               <tr key={entry.userId} style={{ borderTop: idx > 0 ? '1px solid #D9CBAD' : 'none' }}>
                                 <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
