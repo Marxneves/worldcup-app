@@ -209,8 +209,10 @@ export default function RankingPage() {
   const [selectedGameNumber, setSelectedGameNumber] = useState<number | null>(null)
   const [simulatorMode, setSimulatorMode] = useState(false)
   const [simulatedScores, setSimulatedScores] = useState<Record<number, { score1: string; score2: string }>>({})
+  const [liveScores, setLiveScores] = useState<Record<number, { score1: number; score2: number; timeElapsed: string }>>({})
   const summaryRef = useRef<HTMLDivElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
+  const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -236,6 +238,46 @@ export default function RankingPage() {
   useEffect(() => {
     if (!simulatorMode) setSimulatedScores({})
   }, [simulatorMode])
+
+  useEffect(() => {
+    if (activeTab !== 'summary' || !poolCode) {
+      if (liveIntervalRef.current) {
+        clearInterval(liveIntervalRef.current)
+        liveIntervalRef.current = null
+      }
+      return
+    }
+
+    const sync = async () => {
+      try {
+        const { data } = await api.get('/games/sync-live')
+        const liveMap: Record<number, { score1: number; score2: number; timeElapsed: string }> = {}
+        for (const ls of data.liveScores) {
+          liveMap[ls.gameNumber] = ls
+        }
+        setLiveScores(liveMap)
+        queryClient.invalidateQueries({ queryKey: ['daily-summary', poolCode, summaryDate] })
+
+        if (data.liveScores.length > 0 && !liveIntervalRef.current) {
+          liveIntervalRef.current = setInterval(sync, 60000)
+        } else if (data.liveScores.length === 0 && liveIntervalRef.current) {
+          clearInterval(liveIntervalRef.current)
+          liveIntervalRef.current = null
+        }
+      } catch {
+        // silent — não exibir erro se a fonte externa falhar
+      }
+    }
+
+    sync()
+
+    return () => {
+      if (liveIntervalRef.current) {
+        clearInterval(liveIntervalRef.current)
+        liveIntervalRef.current = null
+      }
+    }
+  }, [activeTab, poolCode, summaryDate])
 
   const { data: gameRankingData, isLoading: gameRankingLoading } = useQuery({
     queryKey: ['daily-summary', poolCode, summaryDate, selectedGameNumber],
@@ -648,13 +690,18 @@ export default function RankingPage() {
                   {visibleGames.map(game => {
                     const gameScore1 = game.score1 as number | null
                     const hasOfficialResult = gameScore1 !== null
+                    const liveScore = liveScores[game.number]
+                    const hasLiveScore = !hasOfficialResult && liveScore != null
                     const simScore = simulatedScores[game.number]
                     const simScore1 = simScore?.score1 ?? ''
                     const simScore2 = simScore?.score2 ?? ''
-                    const hasSimScore = simulatorMode && !hasOfficialResult && simScore1 !== '' && simScore2 !== ''
+                    const hasSimScore = simulatorMode && !hasOfficialResult && !hasLiveScore && simScore1 !== '' && simScore2 !== ''
 
                     const getEffectivePoints = (pred: typeof game.predictions[0]): number | null => {
                       if (hasOfficialResult) return pred.points ?? 0
+                      if (hasLiveScore && pred.score1 !== null) {
+                        return computeSimPoints(pred.score1, pred.score2!, liveScore.score1, liveScore.score2)
+                      }
                       if (hasSimScore && pred.score1 !== null) {
                         return computeSimPoints(pred.score1, pred.score2!, Number(simScore1), Number(simScore2))
                       }
@@ -740,7 +787,12 @@ export default function RankingPage() {
                               <td colSpan={3} style={{ paddingTop: 10, paddingBottom: 4, paddingLeft: 16, paddingRight: 16 }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                   <tbody><tr>
-                                    <td style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>Jogo {game.number}</td>
+                                    <td style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>
+                                      Jogo {game.number}
+                                      {hasLiveScore && (
+                                        <span style={{ marginLeft: 8, color: '#e63946', fontWeight: 800, letterSpacing: 0.5 }}>AO VIVO</span>
+                                      )}
+                                    </td>
                                     <td style={{ fontSize: 11, color: '#64748b', textAlign: 'right' }}>
                                       {new Date(game.matchDate).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                                     </td>
@@ -764,9 +816,11 @@ export default function RankingPage() {
                                   {TEAM_ABBR[game.team1] ?? game.team1}
                                 </span>
                               </td>
-                              <td style={{ textAlign: 'center', paddingTop: 10, paddingBottom: 10, paddingLeft: 6, paddingRight: 6, width: 80, whiteSpace: 'nowrap', fontSize: 22, fontWeight: 900, color: hasSimScore ? '#295A71' : '#1a1a1a' }}>
+                              <td style={{ textAlign: 'center', paddingTop: 10, paddingBottom: 10, paddingLeft: 6, paddingRight: 6, width: 80, whiteSpace: 'nowrap', fontSize: 22, fontWeight: 900, color: hasLiveScore ? '#e63946' : hasSimScore ? '#295A71' : '#1a1a1a' }}>
                                 {hasOfficialResult
                                   ? `${game.score1} × ${game.score2}`
+                                  : hasLiveScore
+                                  ? `${liveScore.score1} × ${liveScore.score2}`
                                   : hasSimScore
                                   ? `${simScore1} × ${simScore2}`
                                   : '—'}
@@ -796,6 +850,11 @@ export default function RankingPage() {
                                 bgColor = pred.points === 3 ? 'rgba(0,254,168,0.12)' : pred.points === 1 ? 'rgba(255,209,0,0.12)' : 'transparent'
                                 ptsColor = pred.points === 3 ? '#295A71' : pred.points === 1 ? '#B8960A' : '#e63946'
                                 ptsLabel = pred.points === 3 ? '+3 pts' : pred.points === 1 ? '+1 pt' : '0 pts'
+                              } else if (hasLiveScore && pred.score1 !== null) {
+                                const livePts = computeSimPoints(pred.score1, pred.score2!, liveScore.score1, liveScore.score2)
+                                bgColor = livePts === 3 ? 'rgba(230,57,70,0.08)' : livePts === 1 ? 'rgba(255,209,0,0.12)' : 'transparent'
+                                ptsColor = livePts === 3 ? '#e63946' : livePts === 1 ? '#B8960A' : '#94a3b8'
+                                ptsLabel = livePts === 3 ? '+3 pts' : livePts === 1 ? '+1 pt' : '0 pts'
                               } else if (hasSimScore && pred.score1 !== null) {
                                 const simPts = computeSimPoints(pred.score1, pred.score2!, Number(simScore1), Number(simScore2))
                                 bgColor = simPts === 3 ? 'rgba(0,254,168,0.12)' : simPts === 1 ? 'rgba(255,209,0,0.12)' : 'transparent'
