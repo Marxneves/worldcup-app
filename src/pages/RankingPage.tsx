@@ -304,10 +304,16 @@ export default function RankingPage() {
         bgcolor: '#F5EDD0',
         scale: 2,
       })
-      const link = document.createElement('a')
-      link.href = dataUrl
-      link.download = `resumo-${summaryDate}.png`
-      link.click()
+      const blob = await fetch(dataUrl).then(r => r.blob())
+      const file = new File([blob], `resumo-${summaryDate}.png`, { type: 'image/png' })
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Resumo ${summaryDate}` })
+      } else {
+        const link = document.createElement('a')
+        link.href = dataUrl
+        link.download = `resumo-${summaryDate}.png`
+        link.click()
+      }
     } finally {
       setSharing(false)
     }
@@ -680,21 +686,35 @@ export default function RankingPage() {
         {activeTab === 'summary' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="flex items-center justify-between mb-3">
-              <input
-                ref={dateInputRef}
-                type="date"
-                value={summaryDate}
-                onChange={e => {
-                  setSummaryDate(e.target.value)
-                  dateInputRef.current?.blur()
-                }}
-                className="text-sm border border-copa-border rounded-lg px-3 py-1.5 bg-copa-card text-copa-dark"
-              />
+              <div className="relative">
+                <input
+                  ref={dateInputRef}
+                  type="date"
+                  value={summaryDate}
+                  onChange={e => {
+                    setSummaryDate(e.target.value)
+                    dateInputRef.current?.blur()
+                  }}
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                />
+                <button
+                  onClick={() => dateInputRef.current?.showPicker()}
+                  className="text-sm border border-copa-border rounded-lg px-3 py-1.5 bg-copa-card text-copa-dark flex items-center gap-1.5"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  {summaryDate}
+                </button>
+              </div>
               <div className="flex items-center gap-2">
                 {hasUnfinishedGames && !isSummaryLoading && (
                   <button
                     onClick={() => setSimulatorMode(v => !v)}
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+                    className={`text-sm font-semibold px-4 py-1.5 rounded-full border transition-colors ${
                       simulatorMode
                         ? 'bg-copa-teal text-white border-copa-teal'
                         : 'bg-copa-card text-copa-dark border-copa-border'
