@@ -240,13 +240,18 @@ export default function RankingPage() {
   }, [simulatorMode])
 
   useEffect(() => {
-    if (activeTab !== 'summary' || !poolCode) {
-      if (liveIntervalRef.current) {
-        clearInterval(liveIntervalRef.current)
-        liveIntervalRef.current = null
-      }
-      return
+    if (liveIntervalRef.current) {
+      clearInterval(liveIntervalRef.current)
+      liveIntervalRef.current = null
     }
+
+    if (activeTab !== 'summary' || !poolCode || !summaryData) return
+
+    const now = new Date()
+    const hasPendingGames = summaryData.games.some(
+      g => (g.score1 as number | null) === null && new Date(g.matchDate) <= now
+    )
+    if (!hasPendingGames) return
 
     const sync = async () => {
       try {
@@ -278,7 +283,7 @@ export default function RankingPage() {
         liveIntervalRef.current = null
       }
     }
-  }, [activeTab, poolCode, summaryDate])
+  }, [activeTab, poolCode, summaryDate, summaryData])
 
   const { data: gameRankingData, isLoading: gameRankingLoading } = useQuery({
     queryKey: ['daily-summary', poolCode, summaryDate, selectedGameNumber],
