@@ -334,6 +334,10 @@ export default function RankingPage() {
 
   const hasUnfinishedGames = visibleGames.some(g => (g.score1 as number | null) === null)
 
+  useEffect(() => {
+    if (!hasUnfinishedGames) setSimulatorMode(false)
+  }, [hasUnfinishedGames])
+
   const simulatedRanking = useMemo((): Array<DailySummaryRankingEntry & { position: number }> | null => {
     if (!simulatorMode || !activeData) return null
 
