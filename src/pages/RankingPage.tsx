@@ -653,9 +653,20 @@ export default function RankingPage() {
                     const simScore2 = simScore?.score2 ?? ''
                     const hasSimScore = simulatorMode && !hasOfficialResult && simScore1 !== '' && simScore2 !== ''
 
+                    const getEffectivePoints = (pred: typeof game.predictions[0]): number | null => {
+                      if (hasOfficialResult) return pred.points ?? 0
+                      if (hasSimScore && pred.score1 !== null) {
+                        return computeSimPoints(pred.score1, pred.score2!, Number(simScore1), Number(simScore2))
+                      }
+                      return null
+                    }
+
                     const sortedPredictions = [...game.predictions].sort((a, b) => {
                       if (a.score1 === null && b.score1 !== null) return 1
                       if (a.score1 !== null && b.score1 === null) return -1
+                      const ptsA = getEffectivePoints(a)
+                      const ptsB = getEffectivePoints(b)
+                      if (ptsA !== null && ptsB !== null && ptsA !== ptsB) return ptsB - ptsA
                       if (a.score1 !== b.score1) return (a.score1 ?? 0) - (b.score1 ?? 0)
                       if (a.score2 !== b.score2) return (a.score2 ?? 0) - (b.score2 ?? 0)
                       return a.name.localeCompare(b.name)
