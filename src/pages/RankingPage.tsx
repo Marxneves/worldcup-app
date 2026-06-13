@@ -250,7 +250,8 @@ export default function RankingPage() {
 
     const sync = async () => {
       try {
-        const { data } = await api.get('/games/sync-live')
+        const mockLive = new URLSearchParams(window.location.search).get('mockLive')
+        const { data } = await api.get('/games/sync-live', { params: mockLive ? { mockLive } : undefined })
         const liveMap: Record<number, { score1: number; score2: number; timeElapsed: string }> = {}
         for (const ls of data.liveScores) {
           liveMap[ls.gameNumber] = ls
