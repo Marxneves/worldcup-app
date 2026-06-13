@@ -128,3 +128,6 @@
 .brazil-day .bg-copa-card .text-slate-500 { color: #64748b; }
 .brazil-day .card .text-slate-400,
 .brazil-day .bg-copa-card .text-slate-400 { color: #94a3b8; }
+
+/* Brazil day: group/date info inside cards → navy blue (readable on cream) */
+.brazil-day .card .text-copa-gold { color: #000080; }

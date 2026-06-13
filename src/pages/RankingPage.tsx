@@ -1077,8 +1077,8 @@ export default function RankingPage() {
                   className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
                   onClick={() => setUpcomingExpanded(v => !v)}
                 >
-                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Próximos jogos <span className="text-copa-gold" style={{ color: isBrazilDay ? '#FFDF00' : undefined }}>({upcomingGames.length})</span></span>
-                  <span className="text-xl leading-none" style={{ color: isBrazilDay ? '#FFDF00' : undefined }}>{upcomingExpanded ? '▾' : '▸'}</span>
+                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Próximos jogos <span className="text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>({upcomingGames.length})</span></span>
+                  <span className="text-xl leading-none text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>{upcomingExpanded ? '▾' : '▸'}</span>
                 </button>
                 {upcomingExpanded && (
                   <div className="space-y-2">
@@ -1108,8 +1108,8 @@ export default function RankingPage() {
                   className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
                   onClick={() => setResultsExpanded(v => !v)}
                 >
-                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Resultados <span className="text-copa-gold" style={{ color: isBrazilDay ? '#FFDF00' : undefined }}>({finishedGames.length})</span></span>
-                  <span className="text-xl leading-none" style={{ color: isBrazilDay ? '#FFDF00' : undefined }}>{resultsExpanded ? '▾' : '▸'}</span>
+                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Resultados <span className="text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>({finishedGames.length})</span></span>
+                  <span className="text-xl leading-none text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>{resultsExpanded ? '▾' : '▸'}</span>
                 </button>
                 {resultsExpanded && (
                   <div className="space-y-2">
