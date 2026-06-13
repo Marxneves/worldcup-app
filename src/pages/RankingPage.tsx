@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -6,7 +6,7 @@ import domtoimage from 'dom-to-image-more'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useBrazilDay } from '../hooks/useBrazilDay'
-import { RankingEntry, Game, Prediction, Pool, DailySummary } from '../types'
+import { RankingEntry, Game, Prediction, Pool, DailySummary, DailySummaryRankingEntry } from '../types'
 import FlagImage, { TEAM_ABBR, FLAG_CODES } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
 
@@ -27,6 +27,54 @@ function ShareIcon() {
       <path d="M3 11v2a1 1 0 001 1h8a1 1 0 001-1v-2" />
     </svg>
   )
+}
+
+function LoadingSpinner() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 gap-3">
+      <motion.div
+        style={{
+          width: 32, height: 32, borderRadius: '50%',
+          border: '3px solid #D9CBAD',
+          borderTopColor: '#FFD100',
+        }}
+        animate={{ rotate: 360 }}
+        transition={{ duration: 0.75, repeat: Infinity, ease: 'linear' }}
+      />
+      <p className="text-sm text-slate-500">Carregando...</p>
+    </div>
+  )
+}
+
+function getOutcome(s1: number, s2: number): 'home' | 'away' | 'draw' {
+  if (s1 > s2) return 'home'
+  if (s2 > s1) return 'away'
+  return 'draw'
+}
+
+function computeSimPoints(predScore1: number, predScore2: number, realScore1: number, realScore2: number): number {
+  if (predScore1 === realScore1 && predScore2 === realScore2) return 3
+  if (getOutcome(predScore1, predScore2) === getOutcome(realScore1, realScore2)) return 1
+  return 0
+}
+
+function applyStandardRanking<T extends { totalPoints: number; exactScores: number }>(
+  sorted: T[]
+): Array<T & { position: number }> {
+  const positions: number[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    if (i === 0) {
+      positions.push(1)
+    } else if (
+      sorted[i].totalPoints === sorted[i - 1].totalPoints &&
+      sorted[i].exactScores === sorted[i - 1].exactScores
+    ) {
+      positions.push(positions[i - 1])
+    } else {
+      positions.push(i + 1)
+    }
+  }
+  return sorted.map((item, i) => ({ ...item, position: positions[i] }))
 }
 
 interface GameCardProps {
@@ -159,7 +207,10 @@ export default function RankingPage() {
   const [summaryDate, setSummaryDate] = useState(() => todayBRT)
   const [sharing, setSharing] = useState(false)
   const [selectedGameNumber, setSelectedGameNumber] = useState<number | null>(null)
+  const [simulatorMode, setSimulatorMode] = useState(false)
+  const [simulatedScores, setSimulatedScores] = useState<Record<number, { score1: string; score2: string }>>({})
   const summaryRef = useRef<HTMLDivElement>(null)
+  const dateInputRef = useRef<HTMLInputElement>(null)
 
   const queryClient = useQueryClient()
 
@@ -172,9 +223,21 @@ export default function RankingPage() {
     enabled: activeTab === 'summary' && !!poolCode,
   })
 
-  useEffect(() => { setSelectedGameNumber(null) }, [summaryDate])
+  useEffect(() => {
+    setSelectedGameNumber(null)
+    setSimulatorMode(false)
+    setSimulatedScores({})
+  }, [summaryDate])
 
-  const { data: gameRankingData } = useQuery({
+  useEffect(() => {
+    setSimulatedScores({})
+  }, [selectedGameNumber])
+
+  useEffect(() => {
+    if (!simulatorMode) setSimulatedScores({})
+  }, [simulatorMode])
+
+  const { data: gameRankingData, isLoading: gameRankingLoading } = useQuery({
     queryKey: ['daily-summary', poolCode, summaryDate, selectedGameNumber],
     queryFn: async () => {
       const { data } = await api.get(`/pools/${poolCode}/daily-summary`, {
@@ -266,6 +329,66 @@ export default function RankingPage() {
   const activeData = selectedGameNumber !== null ? gameRankingData : summaryData
   const visibleGames = activeData?.games ?? []
   const visibleRanking = activeData?.ranking ?? []
+
+  const isSummaryLoading = summaryLoading || (selectedGameNumber !== null && gameRankingLoading)
+
+  const hasUnfinishedGames = visibleGames.some(g => (g.score1 as number | null) === null)
+
+  const simulatedRanking = useMemo((): Array<DailySummaryRankingEntry & { position: number }> | null => {
+    if (!simulatorMode || !activeData) return null
+
+    const { games, ranking } = activeData
+    const hasAnyScore = Object.values(simulatedScores).some(s => s.score1 !== '' && s.score2 !== '')
+    if (!hasAnyScore) return null
+
+    const entries = ranking.map(entry => {
+      const basePoints = entry.totalPoints - entry.todayPoints
+
+      let scopeExactScores = 0
+      games.forEach(game => {
+        if ((game.score1 as number | null) !== null) {
+          const pred = game.predictions.find(p => p.userId === entry.userId)
+          if (pred?.points === 3) scopeExactScores++
+        }
+      })
+      const baseExactScores = entry.exactScores - scopeExactScores
+
+      let simTodayPoints = 0
+      let simExactScores = baseExactScores
+
+      games.forEach(game => {
+        const pred = game.predictions.find(p => p.userId === entry.userId)
+        if (!pred || pred.score1 === null) return
+
+        if ((game.score1 as number | null) !== null) {
+          simTodayPoints += pred.points ?? 0
+          if (pred.points === 3) simExactScores++
+        } else {
+          const simScore = simulatedScores[game.number]
+          if (simScore && simScore.score1 !== '' && simScore.score2 !== '') {
+            const pts = computeSimPoints(pred.score1!, pred.score2!, Number(simScore.score1), Number(simScore.score2))
+            simTodayPoints += pts
+            if (pts === 3) simExactScores++
+          }
+        }
+      })
+
+      return {
+        ...entry,
+        totalPoints: basePoints + simTodayPoints,
+        todayPoints: simTodayPoints,
+        exactScores: simExactScores,
+        movement: 0,
+      }
+    })
+
+    entries.sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints
+      return b.exactScores - a.exactScores
+    })
+
+    return applyStandardRanking(entries)
+  }, [simulatorMode, activeData, simulatedScores])
 
   return (
     <div className="min-h-screen pb-8">
@@ -385,7 +508,6 @@ export default function RankingPage() {
                       }}
                       onClick={() => { if (canViewPredictions) setSelectedEntry(entry) }}
                     >
-                      {/* Badge de posição */}
                       {isTop3 && isFirstInTieGroup ? (
                         <div style={{
                           width: 30, height: 30, borderRadius: '50%',
@@ -407,7 +529,6 @@ export default function RankingPage() {
                         </div>
                       )}
 
-                      {/* Nome e estatísticas */}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{
                           fontWeight: 700,
@@ -426,7 +547,6 @@ export default function RankingPage() {
                         )}
                       </div>
 
-                      {/* Pontuação */}
                       {hasFilledPredictions && (
                         <div style={{ flexShrink: 0, textAlign: 'right' }}>
                           <span style={{
@@ -455,20 +575,39 @@ export default function RankingPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="flex items-center justify-between mb-3">
               <input
+                ref={dateInputRef}
                 type="date"
                 value={summaryDate}
-
-                onChange={e => setSummaryDate(e.target.value)}
+                onChange={e => {
+                  setSummaryDate(e.target.value)
+                  dateInputRef.current?.blur()
+                }}
                 className="text-sm border border-copa-border rounded-lg px-3 py-1.5 bg-copa-card text-copa-dark"
               />
-              <button
-                onClick={handleShare}
-                disabled={sharing || summaryLoading || !summaryData || summaryData.games.length === 0}
-                className="text-copa-teal disabled:opacity-40 transition-opacity p-1"
-                style={{ background: 'none', border: 'none' }}
-              >
-                <ShareIcon />
-              </button>
+              <div className="flex items-center gap-2">
+                {hasUnfinishedGames && !isSummaryLoading && (
+                  <button
+                    onClick={() => setSimulatorMode(v => !v)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+                      simulatorMode
+                        ? 'bg-copa-teal text-white border-copa-teal'
+                        : 'bg-copa-card text-copa-dark border-copa-border'
+                    }`}
+                  >
+                    Simular
+                  </button>
+                )}
+                {!simulatorMode && (
+                  <button
+                    onClick={handleShare}
+                    disabled={sharing || isSummaryLoading || !summaryData || summaryData.games.length === 0}
+                    className="text-copa-teal disabled:opacity-40 transition-opacity p-1"
+                    style={{ background: 'none', border: 'none' }}
+                  >
+                    <ShareIcon />
+                  </button>
+                )}
+              </div>
             </div>
 
             {summaryData && summaryData.games.length > 1 && (
@@ -491,133 +630,259 @@ export default function RankingPage() {
               </div>
             )}
 
-            {summaryLoading && (
-              <div className="text-center text-slate-600 py-12">Carregando resumo...</div>
-            )}
+            {isSummaryLoading && <LoadingSpinner />}
 
-            {!summaryLoading && summaryData && (
-              <div ref={summaryRef} style={{ backgroundColor: '#F5EDD0', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {summaryData.games.length === 0 && (
-                  <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, padding: '24px 16px', textAlign: 'center', color: '#64748b', fontSize: 14 }}>
-                    Nenhum jogo nessa data.
-                  </div>
-                )}
+            {!isSummaryLoading && activeData && (
+              <>
+                <div ref={summaryRef} style={{ backgroundColor: '#F5EDD0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {visibleGames.length === 0 && (
+                    <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, padding: '24px 16px', textAlign: 'center', color: '#64748b', fontSize: 14 }}>
+                      Nenhum jogo nessa data.
+                    </div>
+                  )}
 
-                {visibleGames.map(game => (
-                  <table key={game.number} style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD' }}>
-                    <tbody>
-                      {/* Meta: Jogo X e horário */}
-                      <tr>
-                        <td colSpan={3} style={{ paddingTop: 10, paddingBottom: 4, paddingLeft: 16, paddingRight: 16 }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <tbody><tr>
-                              <td style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>Jogo {game.number}</td>
-                              <td style={{ fontSize: 11, color: '#64748b', textAlign: 'right' }}>
-                                {new Date(game.matchDate).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                  {visibleGames.map(game => {
+                    const gameScore1 = game.score1 as number | null
+                    const hasOfficialResult = gameScore1 !== null
+                    const simScore = simulatedScores[game.number]
+                    const simScore1 = simScore?.score1 ?? ''
+                    const simScore2 = simScore?.score2 ?? ''
+                    const hasSimScore = simulatorMode && !hasOfficialResult && simScore1 !== '' && simScore2 !== ''
+
+                    const sortedPredictions = [...game.predictions].sort((a, b) => {
+                      if (a.score1 === null && b.score1 !== null) return 1
+                      if (a.score1 !== null && b.score1 === null) return -1
+                      if (a.score1 !== b.score1) return (a.score1 ?? 0) - (b.score1 ?? 0)
+                      if (a.score2 !== b.score2) return (a.score2 ?? 0) - (b.score2 ?? 0)
+                      return a.name.localeCompare(b.name)
+                    })
+
+                    return (
+                      <div key={game.number}>
+                        {simulatorMode && !hasOfficialResult && (
+                          <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderBottom: 'none', padding: '10px 16px' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#295A71', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+                              Jogo {game.number} — resultado simulado
+                            </p>
+                            <div className="flex items-center gap-3">
+                              <span style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a' }}>
+                                {TEAM_ABBR[game.team1] ?? game.team1}
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="99"
+                                value={simScore1}
+                                onChange={e => setSimulatedScores(prev => ({
+                                  ...prev,
+                                  [game.number]: { score1: e.target.value, score2: prev[game.number]?.score2 ?? '' },
+                                }))}
+                                className="score-input w-10 h-9 text-center text-base font-bold rounded-lg"
+                                placeholder="0"
+                              />
+                              <span className="text-slate-600 font-bold">×</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="99"
+                                value={simScore2}
+                                onChange={e => setSimulatedScores(prev => ({
+                                  ...prev,
+                                  [game.number]: { score1: prev[game.number]?.score1 ?? '', score2: e.target.value },
+                                }))}
+                                className="score-input w-10 h-9 text-center text-base font-bold rounded-lg"
+                                placeholder="0"
+                              />
+                              <span style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a' }}>
+                                {TEAM_ABBR[game.team2] ?? game.team2}
+                              </span>
+                              {(simScore1 !== '' || simScore2 !== '') && (
+                                <button
+                                  onClick={() => setSimulatedScores(prev => {
+                                    const next = { ...prev }
+                                    delete next[game.number]
+                                    return next
+                                  })}
+                                  className="text-slate-400 text-xs ml-1"
+                                >
+                                  limpar
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD' }}>
+                          <tbody>
+                            <tr>
+                              <td colSpan={3} style={{ paddingTop: 10, paddingBottom: 4, paddingLeft: 16, paddingRight: 16 }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                  <tbody><tr>
+                                    <td style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>Jogo {game.number}</td>
+                                    <td style={{ fontSize: 11, color: '#64748b', textAlign: 'right' }}>
+                                      {new Date(game.matchDate).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                                    </td>
+                                  </tr></tbody>
+                                </table>
                               </td>
-                            </tr></tbody>
-                          </table>
-                        </td>
-                      </tr>
+                            </tr>
 
-                      {/* Placar — img inline com verticalAlign:middle, abordagem mais confiável no html2canvas */}
-                      <tr style={{ borderBottom: '1px solid #D9CBAD' }}>
-                        <td style={{ textAlign: 'right', paddingTop: 10, paddingBottom: 10, paddingLeft: 16, paddingRight: 8, whiteSpace: 'nowrap' }}>
-                          {FLAG_CODES[game.team1] && (
-                            <img
-                              src={`/flags/${FLAG_CODES[game.team1]}.png`}
-                              crossOrigin="anonymous"
-                              width={FLAG_CODES[game.team1] === 'ch' ? 14 : 21}
-                              height={14}
-                              style={{ verticalAlign: 'middle', marginRight: 4, display: 'inline' }}
-                            />
-                          )}
-                          <span style={{ fontWeight: 700, fontSize: 13, color: '#1a1a1a', verticalAlign: 'middle' }}>
-                            {TEAM_ABBR[game.team1] ?? game.team1}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: 'center', paddingTop: 10, paddingBottom: 10, paddingLeft: 6, paddingRight: 6, width: 80, whiteSpace: 'nowrap', fontSize: 22, fontWeight: 900, color: '#1a1a1a' }}>
-                          {game.score1 !== null ? `${game.score1} × ${game.score2}` : '—'}
-                        </td>
-                        <td style={{ textAlign: 'left', paddingTop: 10, paddingBottom: 10, paddingLeft: 8, paddingRight: 16, whiteSpace: 'nowrap' }}>
-                          <span style={{ fontWeight: 700, fontSize: 13, color: '#1a1a1a', verticalAlign: 'middle' }}>
-                            {TEAM_ABBR[game.team2] ?? game.team2}
-                          </span>
-                          {FLAG_CODES[game.team2] && (
-                            <img
-                              src={`/flags/${FLAG_CODES[game.team2]}.png`}
-                              crossOrigin="anonymous"
-                              width={FLAG_CODES[game.team2] === 'ch' ? 14 : 21}
-                              height={14}
-                              style={{ verticalAlign: 'middle', marginLeft: 4, display: 'inline' }}
-                            />
-                          )}
-                        </td>
-                      </tr>
+                            <tr style={{ borderBottom: '1px solid #D9CBAD' }}>
+                              <td style={{ textAlign: 'right', paddingTop: 10, paddingBottom: 10, paddingLeft: 16, paddingRight: 8, whiteSpace: 'nowrap' }}>
+                                {FLAG_CODES[game.team1] && (
+                                  <img
+                                    src={`/flags/${FLAG_CODES[game.team1]}.png`}
+                                    crossOrigin="anonymous"
+                                    width={FLAG_CODES[game.team1] === 'ch' ? 14 : 21}
+                                    height={14}
+                                    style={{ verticalAlign: 'middle', marginRight: 4, display: 'inline' }}
+                                  />
+                                )}
+                                <span style={{ fontWeight: 700, fontSize: 13, color: '#1a1a1a', verticalAlign: 'middle' }}>
+                                  {TEAM_ABBR[game.team1] ?? game.team1}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: 'center', paddingTop: 10, paddingBottom: 10, paddingLeft: 6, paddingRight: 6, width: 80, whiteSpace: 'nowrap', fontSize: 22, fontWeight: 900, color: hasSimScore ? '#295A71' : '#1a1a1a' }}>
+                                {hasOfficialResult
+                                  ? `${game.score1} × ${game.score2}`
+                                  : hasSimScore
+                                  ? `${simScore1} × ${simScore2}`
+                                  : '—'}
+                              </td>
+                              <td style={{ textAlign: 'left', paddingTop: 10, paddingBottom: 10, paddingLeft: 8, paddingRight: 16, whiteSpace: 'nowrap' }}>
+                                <span style={{ fontWeight: 700, fontSize: 13, color: '#1a1a1a', verticalAlign: 'middle' }}>
+                                  {TEAM_ABBR[game.team2] ?? game.team2}
+                                </span>
+                                {FLAG_CODES[game.team2] && (
+                                  <img
+                                    src={`/flags/${FLAG_CODES[game.team2]}.png`}
+                                    crossOrigin="anonymous"
+                                    width={FLAG_CODES[game.team2] === 'ch' ? 14 : 21}
+                                    height={14}
+                                    style={{ verticalAlign: 'middle', marginLeft: 4, display: 'inline' }}
+                                  />
+                                )}
+                              </td>
+                            </tr>
 
-                      {/* Palpites — mesmas 3 colunas, placar alinha com o do jogo */}
-                      {game.predictions.map((pred, idx) => {
-                        const hasResult = game.score1 !== null
-                        const bgColor = hasResult
-                          ? (pred.points === 3 ? 'rgba(0,254,168,0.12)' : pred.points === 1 ? 'rgba(255,209,0,0.12)' : 'transparent')
-                          : 'transparent'
-                        const ptsColor = pred.points === 3 ? '#295A71' : pred.points === 1 ? '#B8960A' : '#e63946'
-                        const firstName = pred.name.split(' ')[0]
-                        return (
-                          <tr key={pred.userId} style={{ backgroundColor: bgColor, borderTop: idx === 0 ? 'none' : '1px solid #D9CBAD' }}>
-                            <td style={{ paddingTop: 10, paddingBottom: 10, paddingLeft: 16, paddingRight: 8, fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>
-                              {firstName}
-                            </td>
-                            <td style={{ paddingTop: 10, paddingBottom: 10, paddingLeft: 6, paddingRight: 6, fontSize: 14, color: '#475569', textAlign: 'center', whiteSpace: 'nowrap', width: 80 }}>
-                              {pred.score1 !== null ? `${pred.score1} × ${pred.score2}` : '—'}
-                            </td>
-                            <td style={{ paddingTop: 10, paddingBottom: 10, paddingLeft: 8, paddingRight: 16, fontSize: 13, fontWeight: 700, color: ptsColor, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                              {hasResult ? (pred.points === 3 ? '+3 pts' : pred.points === 1 ? '+1 pt' : '0 pts') : ''}
-                            </td>
+                            {sortedPredictions.map((pred, idx) => {
+                              let bgColor = 'transparent'
+                              let ptsColor = '#e63946'
+                              let ptsLabel = ''
+
+                              if (hasOfficialResult) {
+                                bgColor = pred.points === 3 ? 'rgba(0,254,168,0.12)' : pred.points === 1 ? 'rgba(255,209,0,0.12)' : 'transparent'
+                                ptsColor = pred.points === 3 ? '#295A71' : pred.points === 1 ? '#B8960A' : '#e63946'
+                                ptsLabel = pred.points === 3 ? '+3 pts' : pred.points === 1 ? '+1 pt' : '0 pts'
+                              } else if (hasSimScore && pred.score1 !== null) {
+                                const simPts = computeSimPoints(pred.score1, pred.score2!, Number(simScore1), Number(simScore2))
+                                bgColor = simPts === 3 ? 'rgba(0,254,168,0.12)' : simPts === 1 ? 'rgba(255,209,0,0.12)' : 'transparent'
+                                ptsColor = simPts === 3 ? '#295A71' : simPts === 1 ? '#B8960A' : '#e63946'
+                                ptsLabel = simPts === 3 ? '+3 pts' : simPts === 1 ? '+1 pt' : '0 pts'
+                              }
+
+                              const firstName = pred.name.split(' ')[0]
+                              return (
+                                <tr key={pred.userId} style={{ backgroundColor: bgColor, borderTop: idx === 0 ? 'none' : '1px solid #D9CBAD' }}>
+                                  <td style={{ paddingTop: 10, paddingBottom: 10, paddingLeft: 16, paddingRight: 8, fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>
+                                    {firstName}
+                                  </td>
+                                  <td style={{ paddingTop: 10, paddingBottom: 10, paddingLeft: 6, paddingRight: 6, fontSize: 14, color: '#475569', textAlign: 'center', whiteSpace: 'nowrap', width: 80 }}>
+                                    {pred.score1 !== null ? `${pred.score1} × ${pred.score2}` : '—'}
+                                  </td>
+                                  <td style={{ paddingTop: 10, paddingBottom: 10, paddingLeft: 8, paddingRight: 16, fontSize: 13, fontWeight: 700, color: ptsColor, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                    {ptsLabel}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  })}
+
+                  {visibleGames.length > 0 && !simulatorMode && (
+                    <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden' }}>
+                      <div style={{ borderBottom: '1px solid #D9CBAD', padding: '10px 16px' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>
+                          Ranking geral
+                        </span>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #D9CBAD' }}>
+                            <th style={{ textAlign: 'left', padding: '8px 16px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 48 }}>#</th>
+                            <th style={{ textAlign: 'left', padding: '8px 8px', fontSize: 11, color: '#64748b', fontWeight: 600 }}>Participante</th>
+                            <th style={{ textAlign: 'center', padding: '8px 8px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 56 }}>Jogo</th>
+                            <th style={{ textAlign: 'center', padding: '8px 16px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 56 }}>Total</th>
                           </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                ))}
+                        </thead>
+                        <tbody>
+                          {visibleRanking.map((entry, idx) => {
+                            const moved = entry.movement
+                            const movementIcon = moved > 0 ? '▲' : moved < 0 ? '▼' : ''
+                            const movementColor = moved > 0 ? '#22c55e' : moved < 0 ? '#e63946' : 'transparent'
+                            const isFirstInTieGroup = idx === 0 || visibleRanking[idx - 1].position !== entry.position
+                            return (
+                              <tr key={entry.userId} style={{ borderTop: idx > 0 ? '1px solid #D9CBAD' : 'none' }}>
+                                <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                                  <span style={{ fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>
+                                    {isFirstInTieGroup ? `${entry.position}º` : '—'}
+                                  </span>
+                                  {movementIcon && (
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: movementColor, marginLeft: 3 }}>{movementIcon}</span>
+                                  )}
+                                </td>
+                                <td style={{ padding: '10px 8px', fontWeight: 600, color: '#1a1a1a' }}>{entry.name}</td>
+                                <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, color: '#295A71', fontVariantNumeric: 'tabular-nums' }}>
+                                  {entry.todayPoints > 0 ? `+${entry.todayPoints}` : '—'}
+                                </td>
+                                <td style={{ padding: '10px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                  <span style={{ fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>{entry.totalPoints}</span>
+                                  <span style={{ fontSize: 11, color: '#64748b', marginLeft: 2 }}>pts</span>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
 
-                {visibleGames.length > 0 && (
-                  <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden' }}>
-                    <div style={{ borderBottom: '1px solid #D9CBAD', padding: '10px 16px' }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>
-                        Ranking geral
+                {simulatorMode && simulatedRanking && (
+                  <div style={{ marginTop: 16, backgroundColor: '#FFFDF5', border: '1px solid #295A71', borderRadius: 8, overflow: 'hidden' }}>
+                    <div style={{ borderBottom: '1px solid #D9CBAD', padding: '10px 16px', backgroundColor: '#295A71' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: 1 }}>
+                        Ranking simulado
                       </span>
                     </div>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid #D9CBAD' }}>
-                          <th style={{ textAlign: 'left', padding: '8px 16px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 48 }}>#</th>
+                          <th style={{ textAlign: 'left', padding: '8px 16px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 40 }}>#</th>
                           <th style={{ textAlign: 'left', padding: '8px 8px', fontSize: 11, color: '#64748b', fontWeight: 600 }}>Participante</th>
                           <th style={{ textAlign: 'center', padding: '8px 8px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 56 }}>Jogo</th>
                           <th style={{ textAlign: 'center', padding: '8px 16px', fontSize: 11, color: '#64748b', fontWeight: 600, width: 56 }}>Total</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {visibleRanking.map((entry, idx) => {
-                          const moved = entry.movement
-                          const movementIcon = moved > 0 ? '▲' : moved < 0 ? '▼' : ''
-                          const movementColor = moved > 0 ? '#22c55e' : moved < 0 ? '#e63946' : 'transparent'
-                          const isFirstInTieGroup = idx === 0 || visibleRanking[idx - 1].position !== entry.position
+                        {simulatedRanking.map((entry, idx) => {
+                          const isFirstInTieGroup = idx === 0 || simulatedRanking[idx - 1].position !== entry.position
+                          const isMe = entry.userId === user?.id
                           return (
-                            <tr key={entry.userId} style={{ borderTop: idx > 0 ? '1px solid #D9CBAD' : 'none' }}>
-                              <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
-                                <span style={{ fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>
-                                  {isFirstInTieGroup ? `${entry.position}º` : '—'}
-                                </span>
-                                {movementIcon && (
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: movementColor, marginLeft: 3 }}>{movementIcon}</span>
-                                )}
+                            <tr key={entry.userId} style={{ borderTop: idx > 0 ? '1px solid #D9CBAD' : 'none', backgroundColor: isMe ? 'rgba(41,90,113,0.06)' : 'transparent' }}>
+                              <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>
+                                {isFirstInTieGroup ? `${entry.position}º` : '—'}
                               </td>
-                              <td style={{ padding: '10px 8px', fontWeight: 600, color: '#1a1a1a' }}>{entry.name}</td>
+                              <td style={{ padding: '10px 8px', fontWeight: 600, color: isMe ? '#295A71' : '#1a1a1a' }}>
+                                {entry.name}{isMe ? ' (você)' : ''}
+                              </td>
                               <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, color: '#295A71', fontVariantNumeric: 'tabular-nums' }}>
                                 {entry.todayPoints > 0 ? `+${entry.todayPoints}` : '—'}
                               </td>
-                              <td style={{ padding: '10px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                              <td style={{ padding: '10px 16px', textAlign: 'center' }}>
                                 <span style={{ fontWeight: 900, color: '#1a1a1a', fontVariantNumeric: 'tabular-nums' }}>{entry.totalPoints}</span>
                                 <span style={{ fontSize: 11, color: '#64748b', marginLeft: 2 }}>pts</span>
                               </td>
@@ -628,7 +893,13 @@ export default function RankingPage() {
                     </table>
                   </div>
                 )}
-              </div>
+
+                {simulatorMode && !simulatedRanking && hasUnfinishedGames && (
+                  <div className="mt-4 text-center text-sm text-slate-500 py-4">
+                    Preencha um resultado simulado acima para ver como ficaria o ranking.
+                  </div>
+                )}
+              </>
             )}
           </motion.div>
         )}
