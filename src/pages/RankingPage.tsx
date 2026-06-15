@@ -210,6 +210,7 @@ export default function RankingPage() {
   const [simulatorMode, setSimulatorMode] = useState(false)
   const [simulatedScores, setSimulatedScores] = useState<Record<number, { score1: string; score2: string }>>({})
   const [liveScores, setLiveScores] = useState<Record<number, { score1: number; score2: number; timeElapsed: string }>>({})
+  const [liveSyncError, setLiveSyncError] = useState<string | null>(null)
   const summaryRef = useRef<HTMLDivElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -245,6 +246,9 @@ export default function RankingPage() {
       liveIntervalRef.current = null
     }
 
+    setLiveScores({})
+    setLiveSyncError(null)
+
     if (activeTab !== 'summary' || !poolCode || !summaryData) return
 
     const now = new Date()
@@ -262,6 +266,7 @@ export default function RankingPage() {
           liveMap[ls.gameNumber] = ls
         }
         setLiveScores(liveMap)
+        setLiveSyncError(null)
         queryClient.invalidateQueries({ queryKey: ['daily-summary', poolCode, summaryDate] })
 
         if (data.liveScores.length > 0 && !liveIntervalRef.current) {
@@ -270,8 +275,8 @@ export default function RankingPage() {
           clearInterval(liveIntervalRef.current)
           liveIntervalRef.current = null
         }
-      } catch {
-        // silent — não exibir erro se a fonte externa falhar
+      } catch (err) {
+        setLiveSyncError(err instanceof Error ? err.message : String(err))
       }
     }
 
@@ -757,6 +762,12 @@ export default function RankingPage() {
             )}
 
             {isSummaryLoading && <LoadingSpinner />}
+
+            {user?.isAdmin && liveSyncError && (
+              <div className="mb-3 p-3 rounded-lg border border-red-400 bg-red-50 text-red-700 text-xs font-mono break-all">
+                <span className="font-bold">[Admin] Erro no sync ao vivo:</span> {liveSyncError}
+              </div>
+            )}
 
             {!isSummaryLoading && activeData && (
               <>
