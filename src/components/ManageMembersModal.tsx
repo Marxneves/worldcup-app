@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 
 interface PoolOption {
@@ -27,15 +27,18 @@ interface Props {
   onClose: () => void
 }
 
-type Step = 'select-members' | 'select-target' | 'done'
+type Step = 'list' | 'copy-target' | 'copy-done'
 
-export default function CopyMemberModal({ sourcePoolId, onClose }: Props) {
-  const [step, setStep] = useState<Step>('select-members')
+export default function ManageMembersModal({ sourcePoolId, onClose }: Props) {
+  const queryClient = useQueryClient()
+  const [step, setStep] = useState<Step>('list')
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
   const [targetPoolId, setTargetPoolId] = useState('')
   const [asShadow, setAsShadow] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [results, setResults] = useState<CopyResult[]>([])
+  const [copyResults, setCopyResults] = useState<CopyResult[]>([])
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
+  const [removing, setRemoving] = useState(false)
 
   const { data: membersData, isLoading: membersLoading } = useQuery({
     queryKey: ['admin-pool-members', sourcePoolId],
@@ -58,9 +61,22 @@ export default function CopyMemberModal({ sourcePoolId, onClose }: Props) {
     })
   }
 
-  async function handleSubmit() {
+  async function handleRemove(userId: string) {
+    setRemoving(true)
+    try {
+      await api.delete('/admin/remove-member', { data: { userId, poolId: sourcePoolId } })
+      await queryClient.invalidateQueries({ queryKey: ['admin-pool-members', sourcePoolId] })
+      await queryClient.invalidateQueries({ queryKey: ['ranking'] })
+      setSelectedUserIds(prev => { const next = new Set(prev); next.delete(userId); return next })
+    } finally {
+      setConfirmRemoveId(null)
+      setRemoving(false)
+    }
+  }
+
+  async function handleCopy() {
     setSubmitting(true)
-    const copyResults: CopyResult[] = []
+    const results: CopyResult[] = []
 
     for (const userId of selectedUserIds) {
       const member = membersData?.members.find(m => m.userId === userId)
@@ -71,15 +87,15 @@ export default function CopyMemberModal({ sourcePoolId, onClose }: Props) {
           targetPoolId,
           asShadow,
         })
-        copyResults.push({ name: member?.name ?? userId, ...response.data })
+        results.push({ name: member?.name ?? userId, ...response.data })
       } catch (err: unknown) {
         const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Erro ao copiar'
-        copyResults.push({ name: member?.name ?? userId, message, copiedPredictions: 0, error: message })
+        results.push({ name: member?.name ?? userId, message, copiedPredictions: 0, error: message })
       }
     }
 
-    setResults(copyResults)
-    setStep('done')
+    setCopyResults(results)
+    setStep('copy-done')
     setSubmitting(false)
   }
 
@@ -91,50 +107,79 @@ export default function CopyMemberModal({ sourcePoolId, onClose }: Props) {
     >
       <div className="w-full max-w-md bg-white rounded-t-2xl p-5 pb-8 max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-copa-dark font-bold text-base">Copiar membros</h2>
+          <h2 className="text-copa-dark font-bold text-base">Gerenciar membros</h2>
           <button onClick={onClose} className="text-slate-400 text-xl leading-none">×</button>
         </div>
 
-        {step === 'select-members' && (
+        {step === 'list' && (
           <>
-            <p className="text-xs text-slate-500 mb-3">Selecione quem deseja copiar para outro bolao</p>
+            <p className="text-xs text-slate-500 mb-3">Selecione membros para copiar ou remova individualmente</p>
             {membersLoading ? (
               <p className="text-sm text-slate-500 py-4 text-center">Carregando membros...</p>
             ) : (
               <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
                 {membersData?.members.map(member => (
-                  <label
-                    key={member.userId}
-                    className="flex items-center gap-3 py-3 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedUserIds.has(member.userId)}
-                      onChange={() => toggleMember(member.userId)}
-                      className="accent-copa-teal w-4 h-4"
-                    />
-                    <span className="text-sm text-copa-dark font-medium">{member.name}</span>
-                    {member.isShadow && (
-                      <span className="text-xs text-slate-400 ml-auto">shadow</span>
+                  <div key={member.userId} className="py-3">
+                    {confirmRemoveId === member.userId ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-copa-dark font-medium flex-1">Remover {member.name}?</span>
+                        <button
+                          disabled={removing}
+                          onClick={() => handleRemove(member.userId)}
+                          className="text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg font-semibold disabled:opacity-40"
+                        >
+                          {removing ? '...' : 'Confirmar'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmRemoveId(null)}
+                          className="text-xs text-slate-500 px-2 py-1.5"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.has(member.userId)}
+                          onChange={() => toggleMember(member.userId)}
+                          className="accent-copa-teal w-4 h-4 shrink-0"
+                        />
+                        <span className="text-sm text-copa-dark font-medium flex-1">{member.name}</span>
+                        {member.isShadow && (
+                          <span className="text-xs text-slate-400">oculto</span>
+                        )}
+                        <button
+                          onClick={() => setConfirmRemoveId(member.userId)}
+                          className="text-slate-300 hover:text-red-400 transition-colors p-1"
+                          title="Remover do bolao"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            <path d="M10 11v6M14 11v6" />
+                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                          </svg>
+                        </button>
+                      </div>
                     )}
-                  </label>
+                  </div>
                 ))}
               </div>
             )}
             <button
               disabled={selectedUserIds.size === 0}
-              onClick={() => setStep('select-target')}
+              onClick={() => setStep('copy-target')}
               className="mt-4 w-full py-3 rounded-xl bg-copa-teal text-white font-semibold text-sm disabled:opacity-40"
             >
-              Proximo ({selectedUserIds.size} selecionado{selectedUserIds.size !== 1 ? 's' : ''})
+              Copiar selecionados ({selectedUserIds.size})
             </button>
           </>
         )}
 
-        {step === 'select-target' && (
+        {step === 'copy-target' && (
           <>
             <p className="text-xs text-slate-500 mb-3">Escolha o bolao destino e o tipo de copia</p>
-
             {poolsLoading ? (
               <p className="text-sm text-slate-500 py-4 text-center">Carregando boloes...</p>
             ) : (
@@ -172,7 +217,7 @@ export default function CopyMemberModal({ sourcePoolId, onClose }: Props) {
                       />
                       <div>
                         <p className="text-sm text-copa-dark font-medium">Copia oculta</p>
-                        <p className="text-xs text-slate-500">A pessoa nao vera este bolao nem saberá que esta nele</p>
+                        <p className="text-xs text-slate-500">A pessoa nao vera este bolao nem sabera que esta nele</p>
                       </div>
                     </label>
                     <label className="flex items-start gap-3 cursor-pointer">
@@ -192,17 +237,16 @@ export default function CopyMemberModal({ sourcePoolId, onClose }: Props) {
                 </div>
               </div>
             )}
-
             <div className="flex gap-2 mt-4">
               <button
-                onClick={() => setStep('select-members')}
+                onClick={() => setStep('list')}
                 className="py-3 px-4 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold"
               >
                 Voltar
               </button>
               <button
                 disabled={!targetPoolId || submitting}
-                onClick={handleSubmit}
+                onClick={handleCopy}
                 className="flex-1 py-3 rounded-xl bg-copa-teal text-white font-semibold text-sm disabled:opacity-40"
               >
                 {submitting ? 'Copiando...' : `Copiar ${selectedUserIds.size} membro${selectedUserIds.size !== 1 ? 's' : ''}`}
@@ -211,10 +255,10 @@ export default function CopyMemberModal({ sourcePoolId, onClose }: Props) {
           </>
         )}
 
-        {step === 'done' && (
+        {step === 'copy-done' && (
           <>
             <div className="flex-1 overflow-y-auto space-y-2">
-              {results.map((result, i) => (
+              {copyResults.map((result, i) => (
                 <div
                   key={i}
                   className={`p-3 rounded-xl text-sm ${result.error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-800'}`}
@@ -224,12 +268,20 @@ export default function CopyMemberModal({ sourcePoolId, onClose }: Props) {
                 </div>
               ))}
             </div>
-            <button
-              onClick={onClose}
-              className="mt-4 w-full py-3 rounded-xl bg-copa-gold text-copa-dark font-semibold text-sm"
-            >
-              Fechar
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => { setStep('list'); setSelectedUserIds(new Set()); setCopyResults([]) }}
+                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={onClose}
+                className="flex-1 py-3 rounded-xl bg-copa-gold text-copa-dark font-semibold text-sm"
+              >
+                Fechar
+              </button>
+            </div>
           </>
         )}
       </div>

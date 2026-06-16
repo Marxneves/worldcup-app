@@ -9,7 +9,7 @@ import { useBrazilDay } from '../hooks/useBrazilDay'
 import { RankingEntry, Game, Prediction, Pool, DailySummary, DailySummaryRankingEntry } from '../types'
 import FlagImage, { TEAM_ABBR, FLAG_CODES } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
-import CopyMemberModal from '../components/CopyMemberModal'
+import ManageMembersModal from '../components/ManageMembersModal'
 
 function LockIcon() {
   return (
@@ -594,7 +594,7 @@ export default function RankingPage() {
                   onClick={() => setShowCopyModal(true)}
                   className="text-xs bg-copa-teal/10 text-copa-teal border border-copa-teal/30 px-3 py-1.5 rounded-full font-semibold"
                 >
-                  Copiar membros
+                  Gerenciar membros
                 </button>
               </div>
             )}
@@ -1261,7 +1261,7 @@ export default function RankingPage() {
       </AnimatePresence>
 
       {showCopyModal && poolData && (
-        <CopyMemberModal
+        <ManageMembersModal
           sourcePoolId={poolData.id}
           onClose={() => setShowCopyModal(false)}
         />
