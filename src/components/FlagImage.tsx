@@ -6,7 +6,7 @@ export const TEAM_ABBR: Record<string, string> = {
   'Alemanha': 'GER', 'Curaçao': 'CUW', 'Holanda': 'NED', 'Japão': 'JPN',
   'Costa do Marfim': 'CIV', 'Equador': 'ECU', 'Suécia': 'SWE', 'Tunísia': 'TUN',
   'Espanha': 'ESP', 'Cabo Verde': 'CPV', 'Bélgica': 'BEL', 'Egito': 'EGY',
-  'Arábia Saudita': 'KSA', 'Uruguai': 'URU', 'Irã': 'IRI', 'Nova Zelândia': 'NZL',
+  'Arábia Saudita': 'KSA', 'Uruguai': 'URU', 'Irã': 'IRN', 'Nova Zelândia': 'NZL',
   'França': 'FRA', 'Senegal': 'SEN', 'Iraque': 'IRQ', 'Noruega': 'NOR',
   'Argentina': 'ARG', 'Argélia': 'ALG', 'Áustria': 'AUT', 'Jordânia': 'JOR',
   'Portugal': 'POR', 'RD Congo': 'COD', 'Inglaterra': 'ENG', 'Croácia': 'CRO',
