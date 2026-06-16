@@ -9,6 +9,7 @@ import { useBrazilDay } from '../hooks/useBrazilDay'
 import { RankingEntry, Game, Prediction, Pool, DailySummary, DailySummaryRankingEntry } from '../types'
 import FlagImage, { TEAM_ABBR, FLAG_CODES } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
+import CopyMemberModal from '../components/CopyMemberModal'
 
 function LockIcon() {
   return (
@@ -211,6 +212,7 @@ export default function RankingPage() {
   const [simulatedScores, setSimulatedScores] = useState<Record<number, { score1: string; score2: string }>>({})
   const [liveScores, setLiveScores] = useState<Record<number, { score1: number; score2: number; timeElapsed: string }>>({})
   const [liveSyncError, setLiveSyncError] = useState<string | null>(null)
+  const [showCopyModal, setShowCopyModal] = useState(false)
   const summaryRef = useRef<HTMLDivElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -584,6 +586,16 @@ export default function RankingPage() {
                     Ir para palpites
                   </button>
                 </div>
+              </div>
+            )}
+            {user?.isAdmin && poolData && (
+              <div className="mb-3 flex justify-end">
+                <button
+                  onClick={() => setShowCopyModal(true)}
+                  className="text-xs bg-copa-teal/10 text-copa-teal border border-copa-teal/30 px-3 py-1.5 rounded-full font-semibold"
+                >
+                  Copiar membros
+                </button>
               </div>
             )}
             {rankingLoading ? (
@@ -1247,6 +1259,13 @@ export default function RankingPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {showCopyModal && poolData && (
+        <CopyMemberModal
+          sourcePoolId={poolData.id}
+          onClose={() => setShowCopyModal(false)}
+        />
+      )}
     </div>
   )
 }
