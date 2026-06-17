@@ -213,6 +213,7 @@ export default function RankingPage() {
   const [liveScores, setLiveScores] = useState<Record<number, { score1: number; score2: number; timeElapsed: string }>>({})
   const [liveSyncError, setLiveSyncError] = useState<string | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [syncDone, setSyncDone] = useState(false)
   const [showCopyModal, setShowCopyModal] = useState(false)
   const summaryRef = useRef<HTMLDivElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
@@ -278,8 +279,16 @@ export default function RankingPage() {
 
   const handleManualSync = useCallback(async () => {
     setIsSyncing(true)
-    await fetchLiveScores()
+    setSyncDone(false)
+    const [result] = await Promise.all([
+      fetchLiveScores(),
+      new Promise(resolve => setTimeout(resolve, 1000)),
+    ])
     setIsSyncing(false)
+    if (result !== undefined) {
+      setSyncDone(true)
+      setTimeout(() => setSyncDone(false), 2500)
+    }
   }, [fetchLiveScores])
 
   useEffect(() => {
@@ -755,21 +764,6 @@ export default function RankingPage() {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                {user?.isAdmin && (
-                  <button
-                    onClick={handleManualSync}
-                    disabled={isSyncing}
-                    className="text-copa-teal disabled:opacity-40 transition-opacity p-1"
-                    style={{ background: 'none', border: 'none' }}
-                    title="Sincronizar placares ao vivo"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isSyncing ? 'animate-spin' : ''}>
-                      <polyline points="23 4 23 10 17 10" />
-                      <polyline points="1 20 1 14 7 14" />
-                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                    </svg>
-                  </button>
-                )}
                 {hasUnfinishedGames && !isSummaryLoading && (
                   <button
                     onClick={() => setSimulatorMode(v => !v)}
@@ -807,12 +801,12 @@ export default function RankingPage() {
                   <button
                     key={g.number}
                     onClick={() => setSelectedGameNumber(g.number)}
-                    className={`relative text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === g.number ? 'bg-copa-teal text-white border-copa-teal' : 'bg-copa-card text-copa-dark border-copa-border'}`}
+                    className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === g.number ? 'bg-copa-teal text-white border-copa-teal' : 'bg-copa-card text-copa-dark border-copa-border'}`}
                   >
-                    Jogo {g.number}
                     {liveScores[g.number] && (
-                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-copa-red rounded-full" />
+                      <span className="w-2 h-2 bg-copa-red rounded-full flex-shrink-0" />
                     )}
+                    Jogo {g.number}
                   </button>
                 ))}
               </div>
@@ -844,6 +838,7 @@ export default function RankingPage() {
                     const simScore1 = simScore?.score1 ?? ''
                     const simScore2 = simScore?.score2 ?? ''
                     const hasSimScore = simulatorMode && !hasOfficialResult && !hasLiveScore && simScore1 !== '' && simScore2 !== ''
+                    const showAdminSync = user?.isAdmin && !hasOfficialResult && new Date(game.matchDate) <= new Date()
 
                     const getEffectivePoints = (pred: typeof game.predictions[0]): number | null => {
                       if (hasOfficialResult) return pred.points ?? 0
@@ -942,7 +937,24 @@ export default function RankingPage() {
                                       )}
                                     </td>
                                     <td style={{ fontSize: 11, color: '#64748b', textAlign: 'right' }}>
-                                      {new Date(game.matchDate).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                                      {showAdminSync ? (
+                                        <button
+                                          onClick={handleManualSync}
+                                          disabled={isSyncing}
+                                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4, color: '#295A71', opacity: isSyncing ? 0.5 : 1 }}
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isSyncing ? 'animate-spin' : ''}>
+                                            <polyline points="23 4 23 10 17 10" />
+                                            <polyline points="1 20 1 14 7 14" />
+                                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                          </svg>
+                                          <span style={{ fontSize: 10, fontWeight: 700 }}>
+                                            {isSyncing ? 'Sincronizando...' : syncDone ? 'Sincronizado' : 'Sincronizar'}
+                                          </span>
+                                        </button>
+                                      ) : (
+                                        new Date(game.matchDate).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
+                                      )}
                                     </td>
                                   </tr></tbody>
                                 </table>
