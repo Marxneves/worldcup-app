@@ -6,6 +6,17 @@ import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { Game } from '../types'
 
+function utcToSaoPauloInput(utcIso: string): string {
+  const d = new Date(utcIso)
+  const brt = new Date(d.getTime() - 3 * 60 * 60 * 1000)
+  return brt.toISOString().slice(0, 16)
+}
+
+function saoPauloInputToUtc(brtValue: string): string {
+  const brtAsUtc = new Date(brtValue + ':00Z')
+  return new Date(brtAsUtc.getTime() + 3 * 60 * 60 * 1000).toISOString()
+}
+
 export default function AdminPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -15,6 +26,11 @@ export default function AdminPage() {
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
   const [fetching, setFetching] = useState(false)
+  const [editTimeGameNumber, setEditTimeGameNumber] = useState('')
+  const [editMatchDatePart, setEditMatchDatePart] = useState('')
+  const [editMatchTimePart, setEditMatchTimePart] = useState('')
+  const [timeFeedback, setTimeFeedback] = useState('')
+  const [timeError, setTimeError] = useState('')
 
   const { data: gamesData, refetch } = useQuery({
     queryKey: ['games-admin'],
@@ -47,6 +63,36 @@ export default function AdminPage() {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
       setError(msg || 'Erro ao atualizar')
+    }
+  }
+
+  function handleEditGameNumberChange(value: string) {
+    setEditTimeGameNumber(value)
+    const found = gamesData?.find(g => g.number === Number(value))
+    if (found) {
+      const brt = utcToSaoPauloInput(found.matchDate.toString())
+      setEditMatchDatePart(brt.slice(0, 10))
+      setEditMatchTimePart(brt.slice(11, 16))
+    } else {
+      setEditMatchDatePart('')
+      setEditMatchTimePart('')
+    }
+  }
+
+  async function handleUpdateMatchDate(e: React.FormEvent) {
+    e.preventDefault()
+    setTimeError('')
+    setTimeFeedback('')
+    try {
+      const utcDate = saoPauloInputToUtc(`${editMatchDatePart}T${editMatchTimePart}`)
+      const { data } = await api.patch(`/admin/games/${editTimeGameNumber}/match-date`, {
+        matchDate: utcDate,
+      })
+      setTimeFeedback(data.message)
+      refetch()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setTimeError(msg || 'Erro ao atualizar horário')
     }
   }
 
@@ -128,13 +174,67 @@ export default function AdminPage() {
           </button>
         </div>
 
+        {/* Edit match time */}
+        <div className="card p-5">
+          <h2 className="font-bold text-copa-dark mb-4">Alterar horário de jogo</h2>
+          <form onSubmit={handleUpdateMatchDate} className="space-y-3">
+            <input
+              className="input-field"
+              type="number"
+              placeholder="Número do jogo (1-72)"
+              value={editTimeGameNumber}
+              onChange={e => handleEditGameNumberChange(e.target.value)}
+              min="1" max="72"
+              required
+            />
+            {editTimeGameNumber && gamesData?.find(g => g.number === Number(editTimeGameNumber)) && (
+              <p className="text-xs text-slate-500">
+                {gamesData.find(g => g.number === Number(editTimeGameNumber))!.team1} x{' '}
+                {gamesData.find(g => g.number === Number(editTimeGameNumber))!.team2}
+              </p>
+            )}
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Horário de Brasília (BRT)</label>
+              <div className="flex gap-2">
+                <input
+                  className="input-field flex-1 min-w-0"
+                  type="date"
+                  value={editMatchDatePart}
+                  onChange={e => setEditMatchDatePart(e.target.value)}
+                  required
+                />
+                <input
+                  className="input-field w-28"
+                  type="time"
+                  value={editMatchTimePart}
+                  onChange={e => setEditMatchTimePart(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <button type="submit" className="btn-primary" disabled={!editMatchDatePart || !editMatchTimePart}>
+              Salvar horário
+            </button>
+          </form>
+          {timeFeedback && (
+            <motion.p className="text-copa-menta text-sm font-semibold mt-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              {timeFeedback}
+            </motion.p>
+          )}
+          {timeError && (
+            <motion.p className="text-copa-red text-sm font-semibold mt-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              {timeError}
+            </motion.p>
+          )}
+        </div>
+
         {feedback && (
           <motion.p
             className="text-copa-menta text-center font-semibold"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            ✅ {feedback}
+            {feedback}
           </motion.p>
         )}
         {error && (
@@ -143,7 +243,7 @@ export default function AdminPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            ❌ {error}
+            {error}
           </motion.p>
         )}
 
