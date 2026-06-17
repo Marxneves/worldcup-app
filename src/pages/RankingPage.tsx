@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -212,10 +212,12 @@ export default function RankingPage() {
   const [simulatedScores, setSimulatedScores] = useState<Record<number, { score1: string; score2: string }>>({})
   const [liveScores, setLiveScores] = useState<Record<number, { score1: number; score2: number; timeElapsed: string }>>({})
   const [liveSyncError, setLiveSyncError] = useState<string | null>(null)
+  const [isSyncing, setIsSyncing] = useState(false)
   const [showCopyModal, setShowCopyModal] = useState(false)
   const summaryRef = useRef<HTMLDivElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const autoSelectedLiveRef = useRef(false)
 
   const queryClient = useQueryClient()
 
@@ -229,6 +231,10 @@ export default function RankingPage() {
   })
 
   useEffect(() => {
+    autoSelectedLiveRef.current = false
+  }, [activeTab, summaryDate])
+
+  useEffect(() => {
     setSelectedGameNumber(null)
     setSimulatorMode(false)
     setSimulatedScores({})
@@ -239,8 +245,42 @@ export default function RankingPage() {
   }, [selectedGameNumber])
 
   useEffect(() => {
+    if (autoSelectedLiveRef.current) return
+    if (activeTab !== 'summary') return
+    if (!summaryData) return
+    const liveGame = summaryData.games.find(g => liveScores[g.number])
+    if (!liveGame) return
+    setSelectedGameNumber(liveGame.number)
+    autoSelectedLiveRef.current = true
+  }, [liveScores, activeTab, summaryData])
+
+  useEffect(() => {
     if (!simulatorMode) setSimulatedScores({})
   }, [simulatorMode])
+
+  const fetchLiveScores = useCallback(async () => {
+    try {
+      const mockLive = new URLSearchParams(window.location.search).get('mockLive')
+      const { data } = await api.get('/games/sync-live', { params: mockLive ? { mockLive } : undefined })
+      const liveMap: Record<number, { score1: number; score2: number; timeElapsed: string }> = {}
+      for (const ls of data.liveScores) {
+        liveMap[ls.gameNumber] = ls
+      }
+      setLiveScores(liveMap)
+      setLiveSyncError(null)
+      queryClient.invalidateQueries({ queryKey: ['daily-summary', poolCode, summaryDate] })
+      return data.liveScores.length as number
+    } catch (err) {
+      setLiveSyncError(err instanceof Error ? err.message : String(err))
+      return 0
+    }
+  }, [poolCode, summaryDate, queryClient])
+
+  const handleManualSync = useCallback(async () => {
+    setIsSyncing(true)
+    await fetchLiveScores()
+    setIsSyncing(false)
+  }, [fetchLiveScores])
 
   useEffect(() => {
     if (liveIntervalRef.current) {
@@ -260,25 +300,12 @@ export default function RankingPage() {
     if (!hasPendingGames) return
 
     const sync = async () => {
-      try {
-        const mockLive = new URLSearchParams(window.location.search).get('mockLive')
-        const { data } = await api.get('/games/sync-live', { params: mockLive ? { mockLive } : undefined })
-        const liveMap: Record<number, { score1: number; score2: number; timeElapsed: string }> = {}
-        for (const ls of data.liveScores) {
-          liveMap[ls.gameNumber] = ls
-        }
-        setLiveScores(liveMap)
-        setLiveSyncError(null)
-        queryClient.invalidateQueries({ queryKey: ['daily-summary', poolCode, summaryDate] })
-
-        if (data.liveScores.length > 0 && !liveIntervalRef.current) {
-          liveIntervalRef.current = setInterval(sync, 60000)
-        } else if (data.liveScores.length === 0 && liveIntervalRef.current) {
-          clearInterval(liveIntervalRef.current)
-          liveIntervalRef.current = null
-        }
-      } catch (err) {
-        setLiveSyncError(err instanceof Error ? err.message : String(err))
+      const count = await fetchLiveScores()
+      if (count > 0 && !liveIntervalRef.current) {
+        liveIntervalRef.current = setInterval(sync, 30_000)
+      } else if (count === 0 && liveIntervalRef.current) {
+        clearInterval(liveIntervalRef.current)
+        liveIntervalRef.current = null
       }
     }
 
@@ -290,7 +317,7 @@ export default function RankingPage() {
         liveIntervalRef.current = null
       }
     }
-  }, [activeTab, poolCode, summaryDate, summaryData])
+  }, [activeTab, poolCode, summaryDate, summaryData, fetchLiveScores])
 
   const { data: gameRankingData, isLoading: gameRankingLoading } = useQuery({
     queryKey: ['daily-summary', poolCode, summaryDate, selectedGameNumber],
@@ -728,6 +755,21 @@ export default function RankingPage() {
                 </button>
               </div>
               <div className="flex items-center gap-2">
+                {user?.isAdmin && (
+                  <button
+                    onClick={handleManualSync}
+                    disabled={isSyncing}
+                    className="text-copa-teal disabled:opacity-40 transition-opacity p-1"
+                    style={{ background: 'none', border: 'none' }}
+                    title="Sincronizar placares ao vivo"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isSyncing ? 'animate-spin' : ''}>
+                      <polyline points="23 4 23 10 17 10" />
+                      <polyline points="1 20 1 14 7 14" />
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                    </svg>
+                  </button>
+                )}
                 {hasUnfinishedGames && !isSummaryLoading && (
                   <button
                     onClick={() => setSimulatorMode(v => !v)}
@@ -765,9 +807,12 @@ export default function RankingPage() {
                   <button
                     key={g.number}
                     onClick={() => setSelectedGameNumber(g.number)}
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === g.number ? 'bg-copa-teal text-white border-copa-teal' : 'bg-copa-card text-copa-dark border-copa-border'}`}
+                    className={`relative text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedGameNumber === g.number ? 'bg-copa-teal text-white border-copa-teal' : 'bg-copa-card text-copa-dark border-copa-border'}`}
                   >
                     Jogo {g.number}
+                    {liveScores[g.number] && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-copa-red rounded-full" />
+                    )}
                   </button>
                 ))}
               </div>

@@ -163,14 +163,14 @@ export default function AdminPage() {
 
         {/* Auto fetch */}
         <div className="card p-5">
-          <h2 className="font-bold text-copa-dark mb-2">Buscar do GE Globo</h2>
-          <p className="text-slate-600 text-sm mb-4">Tenta buscar resultados automaticamente. Use como complemento ao cadastro manual.</p>
+          <h2 className="font-bold text-copa-dark mb-2">Sincronizar com ESPN</h2>
+          <p className="text-slate-600 text-sm mb-4">Busca resultados de jogos finalizados via ESPN e atualiza automaticamente.</p>
           <button
             className="btn-secondary"
             onClick={handleFetchFromGlobo}
             disabled={fetching}
           >
-            {fetching ? '⏳ Buscando...' : '🌐 Buscar resultados agora'}
+            {fetching ? 'Sincronizando...' : 'Sincronizar resultados'}
           </button>
         </div>
 
