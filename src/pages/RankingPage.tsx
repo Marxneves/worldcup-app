@@ -933,7 +933,9 @@ export default function RankingPage() {
                                     <td style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>
                                       Jogo {game.number}
                                       {hasLiveScore && (
-                                        <span style={{ marginLeft: 8, color: '#e63946', fontWeight: 800, letterSpacing: 0.5 }}>AO VIVO</span>
+                                        <span style={{ marginLeft: 8, color: '#e63946', fontWeight: 800, letterSpacing: 0.5 }}>
+                                          AO VIVO{liveScore.timeElapsed ? ` ${liveScore.timeElapsed}` : ''}
+                                        </span>
                                       )}
                                     </td>
                                     <td style={{ fontSize: 11, color: '#64748b', textAlign: 'right' }}>
