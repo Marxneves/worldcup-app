@@ -1176,6 +1176,10 @@ export default function RankingPage() {
                       statusLabel = 'Pode chegar 3º'
                       statusBg = 'bg-blue-50'
                       statusText = 'text-blue-700'
+                    } else if (odds && odds.top3 === 0) {
+                      statusLabel = 'Fora do pódio'
+                      statusBg = 'bg-slate-100'
+                      statusText = 'text-slate-500'
                     } else {
                       statusLabel = `Máx. ${member.bestPossibleRank}º lugar`
                       statusBg = 'bg-copa-red/10'
