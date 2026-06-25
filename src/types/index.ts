@@ -102,6 +102,7 @@ export interface RankingStatsMember {
 }
 
 export interface RankingStats {
+  phase: 'grupos' | 'knockout'
   remainingGamesCount: number
   members: RankingStatsMember[]
 }

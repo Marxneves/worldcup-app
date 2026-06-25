@@ -301,10 +301,12 @@ export default function RankingPage() {
     },
   })
 
+  const [statsPhase, setStatsPhase] = useState<'grupos' | 'knockout'>('grupos')
+
   const { data: rankingStats, isLoading: statsLoading } = useQuery({
-    queryKey: ['ranking-stats', poolCode],
+    queryKey: ['ranking-stats', poolCode, statsPhase],
     queryFn: async () => {
-      const { data } = await api.get(`/pools/${poolCode}/ranking-stats`)
+      const { data } = await api.get(`/pools/${poolCode}/ranking-stats`, { params: { phase: statsPhase } })
       return data as RankingStats
     },
     enabled: activeTab === 'chances' && !!poolCode,
@@ -1123,6 +1125,20 @@ export default function RankingPage() {
               )
               return (
                 <div className="space-y-3">
+                  <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+                    <button
+                      onClick={() => setStatsPhase('grupos')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statsPhase === 'grupos' ? 'bg-white text-copa-dark shadow-sm' : 'text-slate-500'}`}
+                    >
+                      Fase de Grupos
+                    </button>
+                    <button
+                      onClick={() => setStatsPhase('knockout')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statsPhase === 'knockout' ? 'bg-white text-copa-dark shadow-sm' : 'text-slate-500'}`}
+                    >
+                      Mata-mata
+                    </button>
+                  </div>
                   <div className="card p-3 flex items-center justify-between">
                     <span className="text-copa-teal text-sm font-semibold">Jogos restantes</span>
                     <span className="text-copa-dark font-bold text-lg">{rankingStats.remainingGamesCount}</span>
