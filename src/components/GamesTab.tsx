@@ -247,14 +247,22 @@ function GroupTable({ group, teams }: { group: string; teams: TeamStat[] }) {
   )
 }
 
+function formatKnockoutDate(date: Date): string {
+  const day = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
+  const hour = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo', hour12: false })
+  return `${day} · ${hour}`
+}
+
 function R32MatchCard({
   game,
   standings,
   top8thirds,
+  matchDate,
 }: {
   game: R32Game
   standings: Map<string, TeamStat[]>
   top8thirds: Set<string>
+  matchDate?: Date
 }) {
   const t1 = resolveSlot(game.slot1, standings, top8thirds)
   const t2 = resolveSlot(game.slot2, standings, top8thirds)
@@ -265,44 +273,61 @@ function R32MatchCard({
       border: '1px solid #D9CBAD',
       borderRadius: 0,
       padding: '8px 10px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      justifyContent: 'space-between',
     }}>
-      <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>
-        J{game.matchId}
-      </span>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-        <TeamCell team={t1.team} label={t1.label} />
-      </div>
-      <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
-        <TeamCell team={t2.team} label={t2.label} />
+      {matchDate && (
+        <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
+          J{game.matchId} · {formatKnockoutDate(matchDate)}
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
+        {!matchDate && (
+          <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>
+            J{game.matchId}
+          </span>
+        )}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+          <TeamCell team={t1.team} label={t1.label} />
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+          <TeamCell team={t2.team} label={t2.label} />
+        </div>
       </div>
     </div>
   )
 }
 
-function R16MatchCard({ game }: { game: R16Game }) {
+function R16MatchCard({ game, team1, team2, matchDate }: {
+  game: R16Game
+  team1?: string
+  team2?: string
+  matchDate?: Date
+}) {
+  const t1Real = team1 && !team1.startsWith('Venc.')
+  const t2Real = team2 && !team2.startsWith('Venc.')
+
   return (
-    <div style={{
-      backgroundColor: '#FFFDF5',
-      border: '1px solid #D9CBAD',
-      borderRadius: 0,
-      padding: '8px 10px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      justifyContent: 'space-between',
-    }}>
-      <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J{game.matchId}</span>
-      <div style={{ flex: 1, textAlign: 'right' }}>
-        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Venc. J{game.r32Id1}</span>
-      </div>
-      <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
-      <div style={{ flex: 1 }}>
-        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Venc. J{game.r32Id2}</span>
+    <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, padding: '8px 10px' }}>
+      {matchDate && (
+        <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
+          J{game.matchId} · {formatKnockoutDate(matchDate)}
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
+        {!matchDate && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J{game.matchId}</span>}
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+          {t1Real
+            ? <TeamCell team={team1!} label={team1!} />
+            : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{game.r32Id1}</span>
+          }
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+        <div style={{ flex: 1 }}>
+          {t2Real
+            ? <TeamCell team={team2!} label={team2!} />
+            : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{game.r32Id2}</span>
+          }
+        </div>
       </div>
     </div>
   )
@@ -358,6 +383,14 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
   const standings = useMemo(() => computeGroupStandings(gamesData), [gamesData])
 
   const thirdPlaceRanking = useMemo(() => computeThirdPlaceRanking(standings), [standings])
+
+  const knockoutGames = useMemo(() => {
+    const map = new Map<number, Game>()
+    for (const g of gamesData) {
+      if (g.number >= 73) map.set(g.number, g)
+    }
+    return map
+  }, [gamesData])
 
   const top8thirds = useMemo<Set<string>>(
     () => new Set(thirdPlaceRanking.slice(0, 8).map(t => t.team)),
@@ -480,8 +513,14 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
         />
         {r32Expanded && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-            {R32_BRACKET.map(game => (
-              <R32MatchCard key={game.matchId} game={game} standings={standings} top8thirds={top8thirds} />
+            {[...R32_BRACKET].sort((a, b) => {
+              const da = knockoutGames.get(a.matchId)?.matchDate
+              const db = knockoutGames.get(b.matchId)?.matchDate
+              if (!da) return 1
+              if (!db) return -1
+              return new Date(da).getTime() - new Date(db).getTime()
+            }).map(game => (
+              <R32MatchCard key={game.matchId} game={game} standings={standings} top8thirds={top8thirds} matchDate={knockoutGames.get(game.matchId) ? new Date(knockoutGames.get(game.matchId)!.matchDate) : undefined} />
             ))}
           </div>
         )}
@@ -497,47 +536,142 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
         />
         {r16Expanded && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-            {R16_BRACKET.map(game => (
-              <R16MatchCard key={game.matchId} game={game} />
-            ))}
+            {[...R16_BRACKET].sort((a, b) => {
+              const da = knockoutGames.get(a.matchId)?.matchDate
+              const db = knockoutGames.get(b.matchId)?.matchDate
+              if (!da) return 1
+              if (!db) return -1
+              return new Date(da).getTime() - new Date(db).getTime()
+            }).map(game => {
+              const dbGame = knockoutGames.get(game.matchId)
+              return (
+                <R16MatchCard
+                  key={game.matchId}
+                  game={game}
+                  team1={dbGame?.team1}
+                  team2={dbGame?.team2}
+                  matchDate={dbGame ? new Date(dbGame.matchDate) : undefined}
+                />
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* ── Quartas / Semis / Final (informativo) ── */}
+      {/* ── Quartas / Semis / 3º Lugar / Final ── */}
       <div style={{ borderTop: '1px solid #D9CBAD', paddingTop: 0 }}>
         <SectionHeader
           label="Quartas · Semis · Final"
-          count={7}
+          count={8}
           expanded={qfExpanded}
           onToggle={() => setQfExpanded(v => !v)}
         />
         {qfExpanded && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-            {QF_BRACKET.map(q => (
-              <div key={q.matchId} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J{q.matchId}</span>
-                <span style={{ flex: 1, textAlign: 'right', fontSize: 11, color: '#64748b', fontWeight: 600 }}>Venc. J{q.r16Id1}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
-                <span style={{ flex: 1, fontSize: 11, color: '#64748b', fontWeight: 600 }}>Venc. J{q.r16Id2}</span>
-              </div>
-            ))}
+            {/* Quartas */}
+            {QF_BRACKET.map(q => {
+              const dbGame = knockoutGames.get(q.matchId)
+              const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
+              const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Venc.')
+              const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Venc.')
+              return (
+                <div key={q.matchId} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px' }}>
+                  {matchDate && (
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
+                      J{q.matchId} · {formatKnockoutDate(matchDate)}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {!matchDate && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J{q.matchId}</span>}
+                    <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{q.r16Id1}</span>}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+                    <div style={{ flex: 1 }}>
+                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{q.r16Id2}</span>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
             {/* Semis */}
-            {[{ matchId: 101, q1: 97, q2: 98 }, { matchId: 102, q1: 99, q2: 100 }].map(s => (
-              <div key={s.matchId} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J{s.matchId}</span>
-                <span style={{ flex: 1, textAlign: 'right', fontSize: 11, color: '#64748b', fontWeight: 600 }}>Venc. J{s.q1}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
-                <span style={{ flex: 1, fontSize: 11, color: '#64748b', fontWeight: 600 }}>Venc. J{s.q2}</span>
-              </div>
-            ))}
+            {[{ matchId: 101, q1: 97, q2: 98 }, { matchId: 102, q1: 99, q2: 100 }].map(s => {
+              const dbGame = knockoutGames.get(s.matchId)
+              const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
+              const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Venc.')
+              const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Venc.')
+              return (
+                <div key={s.matchId} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px' }}>
+                  {matchDate && (
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
+                      J{s.matchId} · {formatKnockoutDate(matchDate)}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {!matchDate && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J{s.matchId}</span>}
+                    <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{s.q1}</span>}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+                    <div style={{ flex: 1 }}>
+                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{s.q2}</span>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {/* 3º lugar */}
+            {(() => {
+              const dbGame = knockoutGames.get(103)
+              const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
+              const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Perd.')
+              const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Perd.')
+              return (
+                <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px' }}>
+                  {matchDate && (
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
+                      J103 · 3º Lugar · {formatKnockoutDate(matchDate)}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {!matchDate && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J103</span>}
+                    <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Perd. J101</span>}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+                    <div style={{ flex: 1 }}>
+                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Perd. J102</span>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
             {/* Final */}
-            <div style={{ backgroundColor: '#FFFDF5', border: '2px solid #FFD100', padding: '10px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 9, fontWeight: 800, color: '#B8960A', minWidth: 20 }}>J103</span>
-              <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: '#1a1a1a', fontWeight: 700 }}>Venc. J101</span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#FFD100', paddingLeft: 6, paddingRight: 6 }}>×</span>
-              <span style={{ flex: 1, fontSize: 12, color: '#1a1a1a', fontWeight: 700 }}>Venc. J102</span>
-            </div>
+            {(() => {
+              const dbGame = knockoutGames.get(104)
+              const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
+              const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Venc.')
+              const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Venc.')
+              return (
+                <div style={{ backgroundColor: '#FFFDF5', border: '2px solid #FFD100', padding: '10px 10px' }}>
+                  {matchDate && (
+                    <div style={{ fontSize: 9, fontWeight: 800, color: '#B8960A', marginBottom: 4 }}>
+                      J104 · FINAL · {formatKnockoutDate(matchDate)}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {!matchDate && <span style={{ fontSize: 9, fontWeight: 800, color: '#B8960A', minWidth: 20 }}>J104</span>}
+                    <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 12, color: '#1a1a1a', fontWeight: 700 }}>Venc. J101</span>}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#FFD100', paddingLeft: 6, paddingRight: 6 }}>×</span>
+                    <div style={{ flex: 1 }}>
+                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 12, color: '#1a1a1a', fontWeight: 700 }}>Venc. J102</span>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
       </div>
