@@ -1143,9 +1143,14 @@ export default function RankingPage() {
                     <span className="text-copa-teal text-sm font-semibold">Jogos restantes</span>
                     <span className="text-copa-dark font-bold text-lg">{rankingStats.remainingGamesCount}</span>
                   </div>
-                  <p className="text-xs text-slate-500 text-center leading-relaxed px-1">
-                    Potencial máximo considerando palpites confirmados e jogos ainda abertos para palpite.
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-slate-500 leading-relaxed flex-1">
+                      Potencial máximo considerando palpites confirmados e jogos ainda abertos para palpite.
+                    </p>
+                    {!rankingStats.hasOdds && (
+                      <span className="text-xs text-slate-400 shrink-0">sem odds</span>
+                    )}
+                  </div>
                   {rankingStats.members.map((member) => {
                     const maxPoints = member.currentPoints + member.maxAdditionalPoints
                     const vsLeader = member.opponents.find(o => o.currentRank === 1)
@@ -1208,8 +1213,36 @@ export default function RankingPage() {
                           <span>máx. {maxPoints} pts</span>
                         </div>
 
+                        {rankingStats.remainingGamesCount > 0 && (
+                          <div className="border-t border-slate-100 pt-2 mt-2">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" style={{ letterSpacing: '0.06em', fontSize: 10 }}>
+                              Probabilidade de pódio {!rankingStats.hasOdds && <span className="normal-case font-normal">(sem odds — aprox.)</span>}
+                            </div>
+                            <div className="flex gap-2">
+                              {[
+                                { label: '1º', value: member.podiumOdds.first, bg: '#FFD100', text: '#1a1a1a' },
+                                { label: '2º', value: member.podiumOdds.second, bg: '#94a3b8', text: '#fff' },
+                                { label: '3º', value: member.podiumOdds.third, bg: '#c97c3a', text: '#fff' },
+                              ].map(({ label, value, bg, text }) => (
+                                <div key={label} className="flex-1 rounded-lg py-2 px-1 text-center" style={{ backgroundColor: value > 0 ? bg : '#f1f5f9' }}>
+                                  <div className="text-xs font-bold" style={{ color: value > 0 ? text : '#94a3b8' }}>{label}</div>
+                                  <div className="text-sm font-extrabold tabular-nums" style={{ color: value > 0 ? text : '#94a3b8' }}>
+                                    {value > 0 ? `${value}%` : '—'}
+                                  </div>
+                                </div>
+                              ))}
+                              <div className="flex-1 rounded-lg py-2 px-1 text-center bg-copa-menta/20">
+                                <div className="text-xs font-bold text-copa-teal">Top 3</div>
+                                <div className="text-sm font-extrabold tabular-nums text-copa-teal">
+                                  {member.podiumOdds.top3 > 0 ? `${member.podiumOdds.top3}%` : '—'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {member.position > 1 && (
-                          <div className="border-t border-slate-100 pt-2">
+                          <div className="border-t border-slate-100 pt-2 mt-2">
                             <div className="flex items-center justify-between text-xs mb-2">
                               <span className="text-slate-500 font-semibold">Melhor posição possível</span>
                               <span className="font-bold text-copa-dark">{member.bestPossibleRank}º lugar</span>

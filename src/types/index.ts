@@ -90,6 +90,13 @@ export interface RankingStatsOpponent {
   canReach: boolean
 }
 
+export interface PodiumOdds {
+  first: number
+  second: number
+  third: number
+  top3: number
+}
+
 export interface RankingStatsMember {
   userId: string
   name: string
@@ -99,10 +106,12 @@ export interface RankingStatsMember {
   maxAdditionalPoints: number
   bestPossibleRank: number
   opponents: RankingStatsOpponent[]
+  podiumOdds: PodiumOdds
 }
 
 export interface RankingStats {
   phase: 'grupos' | 'knockout'
   remainingGamesCount: number
+  hasOdds: boolean
   members: RankingStatsMember[]
 }

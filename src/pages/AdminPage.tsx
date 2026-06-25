@@ -34,6 +34,7 @@ export default function AdminPage() {
   const [timeFeedback, setTimeFeedback] = useState('')
   const [timeError, setTimeError] = useState('')
   const [togglingStats, setTogglingStats] = useState(false)
+  const [syncingOdds, setSyncingOdds] = useState(false)
 
   const { data: featureFlags } = useQuery({
     queryKey: ['features'],
@@ -42,6 +43,21 @@ export default function AdminPage() {
       return data as { statsEnabled: boolean }
     },
   })
+
+  async function handleSyncOdds() {
+    setSyncingOdds(true)
+    setError('')
+    setFeedback('')
+    try {
+      const { data } = await api.post('/admin/sync-odds')
+      setFeedback(data.message)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setError(msg || 'Erro ao sincronizar odds')
+    } finally {
+      setSyncingOdds(false)
+    }
+  }
 
   async function handleToggleStats() {
     setTogglingStats(true)
@@ -316,6 +332,22 @@ export default function AdminPage() {
               <span className="text-copa-gold font-bold text-sm">{game.score1} x {game.score2}</span>
             </div>
           ))}
+        </div>
+
+        {/* Odds sync */}
+        <div className="card p-5">
+          <h2 className="font-bold text-copa-dark mb-2">Probabilidades dos jogos</h2>
+          <p className="text-slate-600 text-sm mb-4">
+            Busca as odds atuais de casas de apostas para calcular probabilidades de cada participante
+            terminar em 1º, 2º ou 3º lugar. Operação única — não será repetida após sincronizar.
+          </p>
+          <button
+            className="btn-secondary"
+            onClick={handleSyncOdds}
+            disabled={syncingOdds}
+          >
+            {syncingOdds ? 'Sincronizando...' : 'Sincronizar odds'}
+          </button>
         </div>
 
         {/* Feature flags */}
