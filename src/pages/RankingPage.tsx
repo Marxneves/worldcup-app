@@ -1213,7 +1213,7 @@ export default function RankingPage() {
                           <span>máx. {maxPoints} pts</span>
                         </div>
 
-                        {rankingStats.remainingGamesCount > 0 && (
+                        {rankingStats.remainingGamesCount > 0 && member.podiumOdds && (
                           <div className="border-t border-slate-100 pt-2 mt-2">
                             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" style={{ letterSpacing: '0.06em', fontSize: 10 }}>
                               Probabilidade de pódio {!rankingStats.hasOdds && <span className="normal-case font-normal">(sem odds — aprox.)</span>}

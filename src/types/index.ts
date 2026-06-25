@@ -106,7 +106,7 @@ export interface RankingStatsMember {
   maxAdditionalPoints: number
   bestPossibleRank: number
   opponents: RankingStatsOpponent[]
-  podiumOdds: PodiumOdds
+  podiumOdds: PodiumOdds | null
 }
 
 export interface RankingStats {
