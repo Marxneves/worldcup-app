@@ -179,20 +179,20 @@ function TeamCell({ team, label }: { team: string | null; label: string }) {
   )
 }
 
-function GroupTable({ group, teams }: { group: string; teams: TeamStat[] }) {
+function GroupTable({ group, teams, onClick }: { group: string; teams: TeamStat[]; onClick: () => void }) {
   const groupFinished = teams.every(t => t.played === 3)
 
   return (
-    <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden' }}>
+    <div onClick={onClick} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden', cursor: 'pointer' }}>
       <div style={{ backgroundColor: '#F5EDD0', padding: '6px 10px', borderBottom: '1px solid #D9CBAD' }}>
         <span style={{ fontSize: 11, fontWeight: 800, color: '#295A71', textTransform: 'uppercase', letterSpacing: 1 }}>
           Grupo {group}
+          {groupFinished && (
+            <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Encerrado
+            </span>
+          )}
         </span>
-        {groupFinished && (
-          <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Encerrado
-          </span>
-        )}
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
@@ -243,6 +243,60 @@ function GroupTable({ group, teams }: { group: string; teams: TeamStat[] }) {
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function GroupGamesModal({ group, games, onClose }: { group: string; games: Game[]; onClose: () => void }) {
+  const groupGames = games.filter(g => g.group === group).sort((a, b) => a.number - b.number)
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ backgroundColor: '#F5EDD0', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: '20px 20px 40px', maxHeight: '80vh', overflowY: 'auto' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <span style={{ fontSize: 15, fontWeight: 800, color: '#295A71', textTransform: 'uppercase', letterSpacing: 1 }}>
+            Grupo {group} — Jogos
+          </span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: '#64748b', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {groupGames.map(game => {
+            const hasResult = game.score1 !== null
+            return (
+              <div key={game.id} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, padding: '8px 12px' }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 6 }}>
+                  J{game.number} · {new Date(game.matchDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })} · {new Date(game.matchDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo', hour12: false })}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>{TEAM_ABBR[game.team1] ?? game.team1}</span>
+                    <FlagImage team={game.team1} size={16} />
+                  </div>
+                  <div style={{ minWidth: 52, textAlign: 'center' }}>
+                    {hasResult ? (
+                      <span style={{ fontSize: 16, fontWeight: 800, color: '#295A71', fontVariantNumeric: 'tabular-nums' }}>
+                        {game.score1} × {game.score2}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#D9CBAD' }}>× </span>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <FlagImage team={game.team2} size={16} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>{TEAM_ABBR[game.team2] ?? game.team2}</span>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
@@ -374,6 +428,10 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
   const [r32Expanded, setR32Expanded] = useState(true)
   const [r16Expanded, setR16Expanded] = useState(false)
   const [qfExpanded, setQfExpanded] = useState(false)
+  const [sfExpanded, setSfExpanded] = useState(false)
+  const [tpExpanded, setTpExpanded] = useState(false)
+  const [finExpanded, setFinExpanded] = useState(false)
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
   const [adminExpanded, setAdminExpanded] = useState(false)
   const [adminEditing, setAdminEditing] = useState<number | null>(null)
   const [editScore1, setEditScore1] = useState('')
@@ -439,10 +497,14 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
         {/* Grid de grupos — 2 colunas */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
           {GROUPS.map(group => (
-            <GroupTable key={group} group={group} teams={standings.get(group) ?? []} />
+            <GroupTable key={group} group={group} teams={standings.get(group) ?? []} onClick={() => setSelectedGroup(group)} />
           ))}
         </div>
       </div>
+
+      {selectedGroup && (
+        <GroupGamesModal group={selectedGroup} games={gamesData} onClose={() => setSelectedGroup(null)} />
+      )}
 
       {/* ── Ranking dos 3ºs colocados ── */}
       <div style={{ marginTop: 16, marginBottom: 4 }}>
@@ -558,17 +620,11 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
         )}
       </div>
 
-      {/* ── Quartas / Semis / 3º Lugar / Final ── */}
+      {/* ── Quartas de Final ── */}
       <div style={{ borderTop: '1px solid #D9CBAD', paddingTop: 0 }}>
-        <SectionHeader
-          label="Quartas · Semis · Final"
-          count={8}
-          expanded={qfExpanded}
-          onToggle={() => setQfExpanded(v => !v)}
-        />
+        <SectionHeader label="Quartas de Final" count={4} expanded={qfExpanded} onToggle={() => setQfExpanded(v => !v)} />
         {qfExpanded && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-            {/* Quartas */}
             {QF_BRACKET.map(q => {
               const dbGame = knockoutGames.get(q.matchId)
               const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
@@ -576,11 +632,7 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
               const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Venc.')
               return (
                 <div key={q.matchId} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px' }}>
-                  {matchDate && (
-                    <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
-                      J{q.matchId} · {formatKnockoutDate(matchDate)}
-                    </div>
-                  )}
+                  {matchDate && <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>J{q.matchId} · {formatKnockoutDate(matchDate)}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {!matchDate && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J{q.matchId}</span>}
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
@@ -594,7 +646,15 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                 </div>
               )
             })}
-            {/* Semis */}
+          </div>
+        )}
+      </div>
+
+      {/* ── Semifinais ── */}
+      <div style={{ borderTop: '1px solid #D9CBAD', paddingTop: 0 }}>
+        <SectionHeader label="Semifinais" count={2} expanded={sfExpanded} onToggle={() => setSfExpanded(v => !v)} />
+        {sfExpanded && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
             {[{ matchId: 101, q1: 97, q2: 98 }, { matchId: 102, q1: 99, q2: 100 }].map(s => {
               const dbGame = knockoutGames.get(s.matchId)
               const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
@@ -602,11 +662,7 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
               const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Venc.')
               return (
                 <div key={s.matchId} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px' }}>
-                  {matchDate && (
-                    <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
-                      J{s.matchId} · {formatKnockoutDate(matchDate)}
-                    </div>
-                  )}
+                  {matchDate && <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>J{s.matchId} · {formatKnockoutDate(matchDate)}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {!matchDate && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J{s.matchId}</span>}
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
@@ -620,19 +676,23 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                 </div>
               )
             })}
-            {/* 3º lugar */}
-            {(() => {
-              const dbGame = knockoutGames.get(103)
-              const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
-              const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Perd.')
-              const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Perd.')
-              return (
+          </div>
+        )}
+      </div>
+
+      {/* ── 3º Lugar ── */}
+      {(() => {
+        const dbGame = knockoutGames.get(103)
+        const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
+        const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Perd.')
+        const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Perd.')
+        return (
+          <div style={{ borderTop: '1px solid #D9CBAD', paddingTop: 0 }}>
+            <SectionHeader label="3º Lugar" count={1} expanded={tpExpanded} onToggle={() => setTpExpanded(v => !v)} />
+            {tpExpanded && (
+              <div style={{ marginBottom: 8 }}>
                 <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px' }}>
-                  {matchDate && (
-                    <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
-                      J103 · 3º Lugar · {formatKnockoutDate(matchDate)}
-                    </div>
-                  )}
+                  {matchDate && <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>J103 · {formatKnockoutDate(matchDate)}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {!matchDate && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J103</span>}
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
@@ -644,21 +704,25 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                     </div>
                   </div>
                 </div>
-              )
-            })()}
-            {/* Final */}
-            {(() => {
-              const dbGame = knockoutGames.get(104)
-              const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
-              const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Venc.')
-              const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Venc.')
-              return (
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ── Final ── */}
+      {(() => {
+        const dbGame = knockoutGames.get(104)
+        const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
+        const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Venc.')
+        const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Venc.')
+        return (
+          <div style={{ borderTop: '1px solid #D9CBAD', paddingTop: 0 }}>
+            <SectionHeader label="Final" count={1} expanded={finExpanded} onToggle={() => setFinExpanded(v => !v)} />
+            {finExpanded && (
+              <div style={{ marginBottom: 8 }}>
                 <div style={{ backgroundColor: '#FFFDF5', border: '2px solid #FFD100', padding: '10px 10px' }}>
-                  {matchDate && (
-                    <div style={{ fontSize: 9, fontWeight: 800, color: '#B8960A', marginBottom: 4 }}>
-                      J104 · FINAL · {formatKnockoutDate(matchDate)}
-                    </div>
-                  )}
+                  {matchDate && <div style={{ fontSize: 9, fontWeight: 800, color: '#B8960A', marginBottom: 4 }}>J104 · FINAL · {formatKnockoutDate(matchDate)}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {!matchDate && <span style={{ fontSize: 9, fontWeight: 800, color: '#B8960A', minWidth: 20 }}>J104</span>}
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
@@ -670,11 +734,11 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                     </div>
                   </div>
                 </div>
-              )
-            })()}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        )
+      })()}
 
       {/* ── Editar resultados (admin) ── */}
       {isAdmin && (

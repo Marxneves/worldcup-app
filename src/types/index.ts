@@ -79,3 +79,29 @@ export interface DailySummary {
   games: DailySummaryGame[]
   ranking: DailySummaryRankingEntry[]
 }
+
+export interface RankingStatsOpponent {
+  userId: string
+  name: string
+  currentRank: number
+  gap: number
+  maxGain: number
+  canOvertake: boolean
+  canReach: boolean
+}
+
+export interface RankingStatsMember {
+  userId: string
+  name: string
+  currentPoints: number
+  exactScores: number
+  position: number
+  maxAdditionalPoints: number
+  bestPossibleRank: number
+  opponents: RankingStatsOpponent[]
+}
+
+export interface RankingStats {
+  remainingGamesCount: number
+  members: RankingStatsMember[]
+}

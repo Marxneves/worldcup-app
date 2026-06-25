@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import domtoimage from 'dom-to-image-more'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
-import { RankingEntry, Game, Prediction, Pool, DailySummary, DailySummaryRankingEntry } from '../types'
+import { RankingEntry, Game, Prediction, Pool, DailySummary, DailySummaryRankingEntry, RankingStats } from '../types'
 import FlagImage, { TEAM_ABBR, FLAG_CODES } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
 import ManageMembersModal from '../components/ManageMembersModal'
@@ -83,7 +83,7 @@ export default function RankingPage() {
   const { poolCode } = useParams<{ poolCode: string }>()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const [activeTab, setActiveTab] = useState<'ranking' | 'games' | 'summary'>('ranking')
+  const [activeTab, setActiveTab] = useState<'ranking' | 'games' | 'summary' | 'chances'>('ranking')
   const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null)
   const todayBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const [summaryDate, setSummaryDate] = useState(() => todayBRT)
@@ -292,6 +292,25 @@ export default function RankingPage() {
     },
     enabled: !!poolData?.id,
   })
+
+  const { data: featureFlags } = useQuery({
+    queryKey: ['features'],
+    queryFn: async () => {
+      const { data } = await api.get('/admin/features')
+      return data as { statsEnabled: boolean }
+    },
+  })
+
+  const { data: rankingStats, isLoading: statsLoading } = useQuery({
+    queryKey: ['ranking-stats', poolCode],
+    queryFn: async () => {
+      const { data } = await api.get(`/pools/${poolCode}/ranking-stats`)
+      return data as RankingStats
+    },
+    enabled: activeTab === 'chances' && !!poolCode,
+  })
+
+  const showStatsTab = user?.isAdmin || (featureFlags?.statsEnabled ?? false)
 
   const { data: viewPredictions, isLoading: viewLoading } = useQuery({
     queryKey: ['predictions-user', selectedEntry?.userId, poolData?.id],
@@ -521,6 +540,16 @@ export default function RankingPage() {
           >
             Resumo
           </button>
+          {showStatsTab && (
+            <button
+              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                activeTab === 'chances' ? 'bg-copa-gold text-copa-dark' : 'text-slate-600'
+              }`}
+              onClick={() => setActiveTab('chances')}
+            >
+              Projeção
+            </button>
+          )}
         </div>
       </div>
 
@@ -1078,6 +1107,123 @@ export default function RankingPage() {
               myPredictions={myPredictions}
               onSaveResult={handleSaveResult}
             />
+          </motion.div>
+        )}
+
+        {activeTab === 'chances' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            {statsLoading ? (
+              <LoadingSpinner />
+            ) : !rankingStats ? (
+              <p className="text-center text-slate-500 text-sm py-8">Erro ao carregar estatísticas.</p>
+            ) : (() => {
+              const maxPossibleAll = Math.max(
+                ...rankingStats.members.map(m => m.currentPoints + m.maxAdditionalPoints),
+                1
+              )
+              return (
+                <div className="space-y-3">
+                  <div className="card p-3 flex items-center justify-between">
+                    <span className="text-copa-teal text-sm font-semibold">Jogos restantes</span>
+                    <span className="text-copa-dark font-bold text-lg">{rankingStats.remainingGamesCount}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 text-center leading-relaxed px-1">
+                    Potencial máximo considerando palpites confirmados e jogos ainda abertos para palpite.
+                  </p>
+                  {rankingStats.members.map((member) => {
+                    const maxPoints = member.currentPoints + member.maxAdditionalPoints
+                    const vsLeader = member.opponents.find(o => o.currentRank === 1)
+                    const canWin = member.position === 1 || (vsLeader?.canOvertake ?? false)
+                    const canReachTop3 = member.bestPossibleRank <= 3
+
+                    const barPct = Math.round((member.currentPoints / maxPossibleAll) * 100)
+                    const maxBarPct = Math.round((maxPoints / maxPossibleAll) * 100)
+
+                    let statusLabel: string
+                    let statusBg: string
+                    let statusText: string
+                    if (member.position === 1) {
+                      statusLabel = '1º lugar'
+                      statusBg = 'bg-copa-gold/25'
+                      statusText = 'text-amber-700'
+                    } else if (canWin) {
+                      statusLabel = 'Pode vencer'
+                      statusBg = 'bg-copa-menta/20'
+                      statusText = 'text-copa-teal'
+                    } else if (canReachTop3) {
+                      statusLabel = `Pode chegar top ${member.bestPossibleRank}`
+                      statusBg = 'bg-blue-50'
+                      statusText = 'text-blue-700'
+                    } else {
+                      statusLabel = `Min. ${member.bestPossibleRank}º lugar`
+                      statusBg = 'bg-copa-red/10'
+                      statusText = 'text-copa-red'
+                    }
+
+                    return (
+                      <div key={member.userId} className="card p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-copa-teal font-bold text-sm">{member.position}º</span>
+                              <span className="text-copa-dark font-bold text-sm">{member.name}</span>
+                            </div>
+                            <span className="text-slate-500 text-xs">
+                              {member.currentPoints} pts · {member.exactScores} exatos
+                            </span>
+                          </div>
+                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusBg} ${statusText}`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+
+                        <div className="relative h-2 rounded-full bg-slate-100 mb-2 overflow-hidden">
+                          <div
+                            className="absolute inset-y-0 left-0 rounded-full bg-copa-menta/40"
+                            style={{ width: `${maxBarPct}%` }}
+                          />
+                          <div
+                            className="absolute inset-y-0 left-0 rounded-full bg-copa-gold"
+                            style={{ width: `${barPct}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-xs text-slate-500 mb-2">
+                          <span>{member.currentPoints} pts atuais</span>
+                          <span>máx. {maxPoints} pts</span>
+                        </div>
+
+                        {member.position > 1 && (
+                          <div className="border-t border-slate-100 pt-2">
+                            <div className="flex items-center justify-between text-xs mb-2">
+                              <span className="text-slate-500 font-semibold">Melhor posição possível</span>
+                              <span className="font-bold text-copa-dark">{member.bestPossibleRank}º lugar</span>
+                            </div>
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5" style={{ letterSpacing: '0.06em', fontSize: 10 }}>
+                              Comparação com membros à frente
+                            </div>
+                            <div className="space-y-1">
+                              {member.opponents
+                                .filter(o => o.gap > 0)
+                                .sort((a, b) => a.gap - b.gap)
+                                .map(opponent => (
+                                  <div key={opponent.userId} className="flex items-center gap-2 text-xs">
+                                    <span className="text-copa-teal font-bold w-5 shrink-0">{opponent.currentRank}º</span>
+                                    <span className="text-copa-dark font-semibold flex-1 truncate">{opponent.name}</span>
+                                    <span className="text-slate-500 shrink-0">{opponent.gap} atrás</span>
+                                    <span className={`font-bold shrink-0 ${opponent.canOvertake ? 'text-copa-teal' : 'text-copa-red'}`}>
+                                      {opponent.canOvertake ? '✓' : '✗'}
+                                    </span>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
           </motion.div>
         )}
       </div>
