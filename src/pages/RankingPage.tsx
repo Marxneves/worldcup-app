@@ -1180,7 +1180,7 @@ export default function RankingPage() {
                       statusBg = 'bg-blue-50'
                       statusText = 'text-blue-700'
                     } else {
-                      statusLabel = `Min. ${member.bestPossibleRank}º lugar`
+                      statusLabel = `Máx. ${member.bestPossibleRank}º lugar`
                       statusBg = 'bg-copa-red/10'
                       statusText = 'text-copa-red'
                     }
