@@ -83,7 +83,8 @@ export default function RankingPage() {
   const { poolCode } = useParams<{ poolCode: string }>()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const [activeTab, setActiveTab] = useState<'ranking' | 'games' | 'summary' | 'chances'>('ranking')
+  const [activeTab, setActiveTab] = useState<'ranking' | 'games' | 'summary'>('ranking')
+  const [showStatsModal, setShowStatsModal] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null)
   const todayBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const [summaryDate, setSummaryDate] = useState(() => todayBRT)
@@ -309,7 +310,7 @@ export default function RankingPage() {
       const { data } = await api.get(`/pools/${poolCode}/ranking-stats`, { params: { phase: statsPhase } })
       return data as RankingStats
     },
-    enabled: activeTab === 'chances' && !!poolCode,
+    enabled: showStatsModal && !!poolCode,
   })
 
   const showStatsTab = user?.isAdmin || (featureFlags?.statsEnabled ?? false)
@@ -542,16 +543,6 @@ export default function RankingPage() {
           >
             Resumo
           </button>
-          {showStatsTab && (
-            <button
-              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                activeTab === 'chances' ? 'bg-copa-gold text-copa-dark' : 'text-slate-600'
-              }`}
-              onClick={() => setActiveTab('chances')}
-            >
-              Projeção
-            </button>
-          )}
         </div>
       </div>
 
@@ -574,14 +565,29 @@ export default function RankingPage() {
                 </div>
               </div>
             )}
-            {user?.isAdmin && poolData && (
-              <div className="mb-3 flex justify-end">
-                <button
-                  onClick={() => setShowCopyModal(true)}
-                  className="text-xs bg-copa-teal/10 text-copa-teal border border-copa-teal/30 px-3 py-1.5 rounded-full font-semibold"
-                >
-                  Gerenciar membros
-                </button>
+            {(user?.isAdmin || poolData) && (
+              <div className="mb-3 flex justify-end items-center gap-2">
+                {showStatsTab && (
+                  <button
+                    onClick={() => setShowStatsModal(true)}
+                    className="flex items-center gap-1.5 text-xs bg-copa-gold/10 text-amber-700 border border-copa-gold/40 px-3 py-1.5 rounded-full font-semibold"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="8" y1="13" x2="8" y2="6" />
+                      <line x1="4" y1="13" x2="4" y2="9" />
+                      <line x1="12" y1="13" x2="12" y2="3" />
+                    </svg>
+                    Projeção
+                  </button>
+                )}
+                {user?.isAdmin && poolData && (
+                  <button
+                    onClick={() => setShowCopyModal(true)}
+                    className="text-xs bg-copa-teal/10 text-copa-teal border border-copa-teal/30 px-3 py-1.5 rounded-full font-semibold"
+                  >
+                    Gerenciar membros
+                  </button>
+                )}
               </div>
             )}
             {rankingLoading ? (
@@ -1112,138 +1118,154 @@ export default function RankingPage() {
           </motion.div>
         )}
 
-        {activeTab === 'chances' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            {statsLoading ? (
-              <LoadingSpinner />
-            ) : !rankingStats ? (
-              <p className="text-center text-slate-500 text-sm py-8">Erro ao carregar estatísticas.</p>
-            ) : (() => {
-              const maxPossibleAll = Math.max(
-                ...rankingStats.members.map(m => m.currentPoints + m.maxAdditionalPoints),
-                1
-              )
-              return (
-                <div className="space-y-3">
-                  <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
-                    <button
-                      onClick={() => setStatsPhase('grupos')}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statsPhase === 'grupos' ? 'bg-white text-copa-dark shadow-sm' : 'text-slate-500'}`}
-                    >
-                      Fase de Grupos
-                    </button>
-                    <button
-                      onClick={() => setStatsPhase('knockout')}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statsPhase === 'knockout' ? 'bg-white text-copa-dark shadow-sm' : 'text-slate-500'}`}
-                    >
-                      Mata-mata
-                    </button>
-                  </div>
-                  <div className="card p-3 flex items-center justify-between">
-                    <span className="text-copa-teal text-sm font-semibold">Jogos restantes</span>
-                    <span className="text-copa-dark font-bold text-lg">{rankingStats.remainingGamesCount}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs text-slate-500 leading-relaxed flex-1">
-                      Potencial máximo considerando palpites confirmados e jogos ainda abertos para palpite.
-                    </p>
-                    {!rankingStats.hasOdds && (
-                      <span className="text-xs text-slate-400 shrink-0">sem odds</span>
-                    )}
-                  </div>
-                  {rankingStats.members.map((member) => {
-                    const maxPoints = member.currentPoints + member.maxAdditionalPoints
-                    const odds = member.podiumOdds
-                    const barPct = Math.round((member.currentPoints / maxPossibleAll) * 100)
-                    const maxBarPct = Math.round((maxPoints / maxPossibleAll) * 100)
+      </div>
 
-                    let statusLabel: string
-                    let statusBg: string
-                    let statusText: string
-                    if (member.position === 1) {
-                      statusLabel = '1º lugar'
-                      statusBg = 'bg-copa-gold/25'
-                      statusText = 'text-amber-700'
-                    } else if (odds ? odds.first > 0 : member.opponents.find(o => o.currentRank === 1)?.canOvertake) {
-                      statusLabel = 'Pode vencer'
-                      statusBg = 'bg-copa-menta/20'
-                      statusText = 'text-copa-teal'
-                    } else if (odds ? odds.second > 0 : member.bestPossibleRank <= 2) {
-                      statusLabel = 'Pode chegar 2º'
-                      statusBg = 'bg-blue-50'
-                      statusText = 'text-blue-700'
-                    } else if (odds ? odds.third > 0 : member.bestPossibleRank <= 3) {
-                      statusLabel = 'Pode chegar 3º'
-                      statusBg = 'bg-blue-50'
-                      statusText = 'text-blue-700'
-                    } else if (odds && odds.top3 === 0) {
-                      statusLabel = 'Fora do pódio'
-                      statusBg = 'bg-slate-100'
-                      statusText = 'text-slate-500'
-                    } else {
-                      statusLabel = `Máx. ${member.bestPossibleRank}º lugar`
-                      statusBg = 'bg-copa-red/10'
-                      statusText = 'text-copa-red'
-                    }
-
-                    return (
-                      <div key={member.userId} className="card p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-copa-teal font-bold text-sm">{member.position}º</span>
-                              <span className="text-copa-dark font-bold text-sm">{member.name}</span>
-                            </div>
-                            <span className="text-slate-500 text-xs">
-                              {member.currentPoints} pts · {member.exactScores} exatos
-                            </span>
-                          </div>
-                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusBg} ${statusText}`}>
-                            {statusLabel}
-                          </span>
-                        </div>
-
-                        <div className="relative h-2 rounded-full bg-slate-100 mb-2 overflow-hidden">
-                          <div
-                            className="absolute inset-y-0 left-0 rounded-full bg-copa-menta/40"
-                            style={{ width: `${maxBarPct}%` }}
-                          />
-                          <div
-                            className="absolute inset-y-0 left-0 rounded-full bg-copa-gold"
-                            style={{ width: `${barPct}%` }}
-                          />
-                        </div>
-                        <div className="flex justify-between text-xs text-slate-500 mb-2">
-                          <span>{member.currentPoints} pts atuais</span>
-                          <span>máx. {maxPoints} pts</span>
-                        </div>
-
-                        {rankingStats.remainingGamesCount > 0 && member.podiumOdds && (
-                          <div className="border-t border-slate-100 pt-2 mt-2 flex items-center gap-3">
-                            <span className="text-slate-400 shrink-0" style={{ fontSize: 10 }}>
-                              prob.{!rankingStats.hasOdds ? '*' : ''}
-                            </span>
-                            {[
-                              { label: '1º', value: member.podiumOdds.first, color: '#B8960A' },
-                              { label: '2º', value: member.podiumOdds.second, color: '#64748b' },
-                              { label: '3º', value: member.podiumOdds.third, color: '#9a6027' },
-                            ].map(({ label, value, color }) => (
-                              <span key={label} className="text-xs tabular-nums" style={{ color: value > 0 ? color : '#cbd5e1' }}>
-                                <span className="font-semibold">{label}</span>{' '}
-                                <span className="font-bold">{value > 0 ? `${value}%` : '—'}</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+      <AnimatePresence>
+        {showStatsModal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex flex-col justify-end"
+            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowStatsModal(false)}
+          >
+            <motion.div
+              className="rounded-t-3xl max-h-[90vh] flex flex-col"
+              style={{ backgroundColor: 'rgb(var(--copa-cream))' }}
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 300, damping: 35 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center px-5 pt-5 pb-3 shrink-0">
+                <div>
+                  <p className="text-lg font-extrabold text-copa-dark">Projeção</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Probabilidades baseadas em odds de apostas</p>
                 </div>
-              )
-            })()}
+                <button onClick={() => setShowStatsModal(false)} className="text-slate-500 text-xl leading-none pb-1">✕</button>
+              </div>
+
+              <div className="overflow-y-auto px-5 pb-10">
+                {statsLoading ? (
+                  <LoadingSpinner />
+                ) : !rankingStats ? (
+                  <p className="text-center text-slate-500 text-sm py-8">Erro ao carregar estatísticas.</p>
+                ) : (() => {
+                  const maxPossibleAll = Math.max(
+                    ...rankingStats.members.map(m => m.currentPoints + m.maxAdditionalPoints),
+                    1
+                  )
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+                        <button
+                          onClick={() => setStatsPhase('grupos')}
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statsPhase === 'grupos' ? 'bg-white text-copa-dark shadow-sm' : 'text-slate-500'}`}
+                        >
+                          Fase de Grupos
+                        </button>
+                        <button
+                          onClick={() => setStatsPhase('knockout')}
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statsPhase === 'knockout' ? 'bg-white text-copa-dark shadow-sm' : 'text-slate-500'}`}
+                        >
+                          Mata-mata
+                        </button>
+                      </div>
+                      <div className="card p-3 flex items-center justify-between">
+                        <span className="text-copa-teal text-sm font-semibold">Jogos restantes</span>
+                        <span className="text-copa-dark font-bold text-lg">{rankingStats.remainingGamesCount}</span>
+                      </div>
+                      {rankingStats.members.map((member) => {
+                        const maxPoints = member.currentPoints + member.maxAdditionalPoints
+                        const odds = member.podiumOdds
+                        const barPct = Math.round((member.currentPoints / maxPossibleAll) * 100)
+                        const maxBarPct = Math.round((maxPoints / maxPossibleAll) * 100)
+
+                        let statusLabel: string
+                        let statusBg: string
+                        let statusText: string
+                        if (member.position === 1) {
+                          statusLabel = '1º lugar'
+                          statusBg = 'bg-copa-gold/25'
+                          statusText = 'text-amber-700'
+                        } else if (odds ? odds.first > 0 : member.opponents.find(o => o.currentRank === 1)?.canOvertake) {
+                          statusLabel = 'Pode vencer'
+                          statusBg = 'bg-copa-menta/20'
+                          statusText = 'text-copa-teal'
+                        } else if (odds ? odds.second > 0 : member.bestPossibleRank <= 2) {
+                          statusLabel = 'Pode chegar 2º'
+                          statusBg = 'bg-blue-50'
+                          statusText = 'text-blue-700'
+                        } else if (odds ? odds.third > 0 : member.bestPossibleRank <= 3) {
+                          statusLabel = 'Pode chegar 3º'
+                          statusBg = 'bg-blue-50'
+                          statusText = 'text-blue-700'
+                        } else if (odds && odds.top3 === 0) {
+                          statusLabel = 'Fora do pódio'
+                          statusBg = 'bg-slate-100'
+                          statusText = 'text-slate-500'
+                        } else {
+                          statusLabel = `Máx. ${member.bestPossibleRank}º lugar`
+                          statusBg = 'bg-copa-red/10'
+                          statusText = 'text-copa-red'
+                        }
+
+                        return (
+                          <div key={member.userId} className="card p-4">
+                            <div className="flex items-start justify-between mb-3">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-copa-teal font-bold text-sm">{member.position}º</span>
+                                  <span className="text-copa-dark font-bold text-sm">{member.name}</span>
+                                </div>
+                                <span className="text-slate-500 text-xs">
+                                  {member.currentPoints} pts · {member.exactScores} exatos
+                                </span>
+                              </div>
+                              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusBg} ${statusText}`}>
+                                {statusLabel}
+                              </span>
+                            </div>
+
+                            <div className="relative h-2 rounded-full bg-slate-100 mb-2 overflow-hidden">
+                              <div className="absolute inset-y-0 left-0 rounded-full bg-copa-menta/40" style={{ width: `${maxBarPct}%` }} />
+                              <div className="absolute inset-y-0 left-0 rounded-full bg-copa-gold" style={{ width: `${barPct}%` }} />
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-500 mb-2">
+                              <span>{member.currentPoints} pts atuais</span>
+                              <span>máx. {maxPoints} pts</span>
+                            </div>
+
+                            {rankingStats.remainingGamesCount > 0 && member.podiumOdds && (
+                              <div className="border-t border-slate-100 pt-2 mt-2 flex items-center gap-3">
+                                <span className="text-slate-400 shrink-0" style={{ fontSize: 10 }}>
+                                  prob.{!rankingStats.hasOdds ? '*' : ''}
+                                </span>
+                                {[
+                                  { label: '1º', value: member.podiumOdds.first, color: '#B8960A' },
+                                  { label: '2º', value: member.podiumOdds.second, color: '#64748b' },
+                                  { label: '3º', value: member.podiumOdds.third, color: '#9a6027' },
+                                ].map(({ label, value, color }) => (
+                                  <span key={label} className="text-xs tabular-nums" style={{ color: value > 0 ? color : '#cbd5e1' }}>
+                                    <span className="font-semibold">{label}</span>{' '}
+                                    <span className="font-bold">{value > 0 ? `${value}%` : '—'}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+              </div>
+            </motion.div>
           </motion.div>
         )}
-      </div>
+      </AnimatePresence>
 
       <AnimatePresence>
         {selectedEntry && (
