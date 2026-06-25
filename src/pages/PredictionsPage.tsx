@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -132,7 +132,7 @@ export default function PredictionsPage() {
   const [activeGroup, setActiveGroup] = useState('A')
   const [groupDirection, setGroupDirection] = useState(1)
   const [scores, setScores] = useState<Record<string, [string, string]>>({})
-  const [savingGames, setSavingGames] = useState<Record<string, boolean>>({})
+  const [, setSavingGames] = useState<Record<string, boolean>>({})
   const [showConfirm, setShowConfirm] = useState(false)
   const [lockError, setLockError] = useState('')
   const [locking, setLocking] = useState(false)
@@ -140,6 +140,7 @@ export default function PredictionsPage() {
   const [syncError, setSyncError] = useState('')
   const [importing, setImporting] = useState(false)
   const [now, setNow] = useState(() => new Date())
+  const [activeSession, setActiveSession] = useState<'grupos' | 'R32'>('grupos')
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -257,11 +258,11 @@ export default function PredictionsPage() {
     }
 
     if (team === 1 && digits.length >= 1 && games) {
-      const groupGames = games
-        .filter(g => g.group === activeGroup)
-        .sort((a, b) => a.number - b.number)
-      const currentIdx = groupGames.findIndex(g => g.id === gameId)
-      const nextGame = groupGames[currentIdx + 1]
+      const navGames = activeSession === 'R32'
+        ? r32Games
+        : games.filter(g => g.group === activeGroup).sort((a, b) => a.number - b.number)
+      const currentIdx = navGames.findIndex(g => g.id === gameId)
+      const nextGame = navGames[currentIdx + 1]
       if (nextGame) {
         setTimeout(() => {
           const el = score1Refs.current[nextGame.id]
@@ -289,7 +290,7 @@ export default function PredictionsPage() {
     setLocking(true)
     setLockError('')
     try {
-      await api.post('/predictions/lock-all', { poolId: pool.id })
+      await api.post('/predictions/lock-all', { poolId: pool.id, round: activeSession })
       await queryClient.invalidateQueries({ queryKey: ['predictions', poolCode] })
       await queryClient.invalidateQueries({ queryKey: ['ranking', poolCode] })
       navigate(`/ranking/${poolCode}`)
@@ -355,6 +356,44 @@ export default function PredictionsPage() {
     }
   }
 
+  const r32Games = useMemo(() =>
+    (games ?? [])
+      .filter(g => g.group === 'R32')
+      .sort((a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime()),
+    [games]
+  )
+  const showR32Session = r32Games.length > 0
+
+  const r32GameIds = useMemo(() => new Set(r32Games.map(g => g.id)), [r32Games])
+
+  const resolveTeamName = useCallback((name: string): string => {
+    if (!games) return name
+    const match = name.match(/^(\d)º Grupo ([A-L])$/)
+    if (!match) return name
+    const pos = parseInt(match[1]) - 1
+    const groupLetter = match[2]
+    const groupGames = games.filter(g => g.group === groupLetter && g.score1 !== null)
+
+    const teamStats = new Map<string, { pts: number; gd: number; gf: number }>()
+    for (const g of groupGames) {
+      if (!teamStats.has(g.team1)) teamStats.set(g.team1, { pts: 0, gd: 0, gf: 0 })
+      if (!teamStats.has(g.team2)) teamStats.set(g.team2, { pts: 0, gd: 0, gf: 0 })
+      const t1 = teamStats.get(g.team1)!
+      const t2 = teamStats.get(g.team2)!
+      t1.gf += g.score1!; t1.gd += g.score1! - g.score2!
+      t2.gf += g.score2!; t2.gd += g.score2! - g.score1!
+      if (g.score1! > g.score2!) t1.pts += 3
+      else if (g.score1! === g.score2!) { t1.pts += 1; t2.pts += 1 }
+      else t2.pts += 3
+    }
+
+    const sorted = [...teamStats.entries()].sort(([, a], [, b]) =>
+      b.pts !== a.pts ? b.pts - a.pts : b.gd !== a.gd ? b.gd - a.gd : b.gf - a.gf
+    )
+
+    return sorted[pos]?.[0] ?? name
+  }, [games])
+
   if (!games || !pool) {
     return <div className="flex items-center justify-center min-h-screen text-slate-600">Carregando...</div>
   }
@@ -380,8 +419,11 @@ export default function PredictionsPage() {
   for (const groupLetter of GROUPS) gamesByGroup[groupLetter] = []
   for (const game of games) gamesByGroup[game.group]?.push(game)
 
-  const openGames = games.filter(g => new Date(g.matchDate) > now)
   const startedGames = new Set(games.filter(g => new Date(g.matchDate) <= now).map(g => g.id))
+
+  const groupOpenGames = games.filter(g => g.number <= 72 && new Date(g.matchDate) > now)
+  const openR32Games = r32Games.filter(g => new Date(g.matchDate) > now)
+  const openGames = activeSession === 'R32' ? openR32Games : groupOpenGames
 
   const filledCount = Object.values(scores).filter(
     ([score1, score2]) => score1 !== '' && score2 !== ''
@@ -395,9 +437,16 @@ export default function PredictionsPage() {
   const allFilled = openGames.length > 0
     ? openFilledCount === openGames.length
     : filledCount > 0
-  const isAllLocked = savedPredictions?.some(p => p.isLocked) ?? false
+  const isGroupsLocked = savedPredictions?.some(p => p.isLocked && !r32GameIds.has(p.gameId)) ?? false
+  const isR32Locked = savedPredictions?.filter(p => r32GameIds.has(p.gameId)).some(p => p.isLocked) ?? false
+  const isAllLocked = activeSession === 'R32' ? isR32Locked : isGroupsLocked
 
-  const startedGamesList = games.filter(g => startedGames.has(g.id))
+  const startedGamesList = (activeSession === 'R32'
+    ? r32Games
+    : games.filter(g => g.number <= 72)
+  ).filter(g => startedGames.has(g.id))
+
+  const sessionLabel = activeSession === 'R32' ? '16 avos de final' : 'fase de grupos'
 
   if (showConfirm) {
     return (
@@ -408,6 +457,7 @@ export default function PredictionsPage() {
       >
         <div className="text-center mb-6">
           <h2 className="text-2xl font-extrabold text-copa-dark">Confirmar palpites?</h2>
+          <p className="text-xs text-slate-600 mb-1">{sessionLabel}</p>
           <p className="text-slate-600 mt-3 leading-relaxed text-sm">
             Você preencheu <span className="text-copa-gold font-bold">{openFilledCount} de {openGames.length}</span> jogos disponíveis.
           </p>
@@ -464,6 +514,33 @@ export default function PredictionsPage() {
           </span>
         </div>
 
+        {showR32Session && (
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setActiveSession('grupos')}
+              className="flex-1 py-1.5 text-sm font-bold rounded-lg transition-all"
+              style={{
+                backgroundColor: activeSession === 'grupos' ? '#FFD100' : 'transparent',
+                color: '#1a1a1a',
+                border: `1px solid ${activeSession === 'grupos' ? 'transparent' : '#D9CBAD'}`,
+              }}
+            >
+              Fase de Grupos
+            </button>
+            <button
+              onClick={() => setActiveSession('R32')}
+              className="flex-1 py-1.5 text-sm font-bold rounded-lg transition-all"
+              style={{
+                backgroundColor: activeSession === 'R32' ? '#FFD100' : 'transparent',
+                color: '#1a1a1a',
+                border: `1px solid ${activeSession === 'R32' ? 'transparent' : '#D9CBAD'}`,
+              }}
+            >
+              16 avos
+            </button>
+          </div>
+        )}
+
         <div className="h-1.5 bg-copa-border rounded-full overflow-hidden mb-3">
           <motion.div
             className="h-full bg-copa-gold rounded-full"
@@ -472,32 +549,34 @@ export default function PredictionsPage() {
           />
         </div>
 
-        <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          {GROUPS.map(groupLetter => {
-            const groupGames = gamesByGroup[groupLetter]
-            if (!groupGames?.length) return null
-            const groupFilledCount = groupGames.filter(game => {
-              const [score1, score2] = scores[game.id] ?? ['', '']
-              return score1 !== '' && score2 !== ''
-            }).length
-            const isGroupComplete = groupFilledCount === groupGames.length
-            return (
-              <button
-                key={groupLetter}
-                ref={el => { tabButtonRefs.current[groupLetter] = el }}
-                onClick={() => navigateToGroup(groupLetter)}
-                className="shrink-0 h-8 w-8 rounded-lg text-sm font-bold transition-all"
-                style={{
-                  backgroundColor: activeGroup === groupLetter ? '#FFD100' : isGroupComplete ? 'rgba(0,254,168,0.15)' : 'rgb(var(--copa-cream))',
-                  color: '#1a1a1a',
-                  border: isGroupComplete && activeGroup !== groupLetter ? '1px solid rgba(0,254,168,0.4)' : '1px solid transparent',
-                }}
-              >
-                {groupLetter}
-              </button>
-            )
-          })}
-        </div>
+        {activeSession === 'grupos' && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+            {GROUPS.map(groupLetter => {
+              const groupGames = gamesByGroup[groupLetter]
+              if (!groupGames?.length) return null
+              const groupFilledCount = groupGames.filter(game => {
+                const [score1, score2] = scores[game.id] ?? ['', '']
+                return score1 !== '' && score2 !== ''
+              }).length
+              const isGroupComplete = groupFilledCount === groupGames.length
+              return (
+                <button
+                  key={groupLetter}
+                  ref={el => { tabButtonRefs.current[groupLetter] = el }}
+                  onClick={() => navigateToGroup(groupLetter)}
+                  className="shrink-0 h-8 w-8 rounded-lg text-sm font-bold transition-all"
+                  style={{
+                    backgroundColor: activeGroup === groupLetter ? '#FFD100' : isGroupComplete ? 'rgba(0,254,168,0.15)' : 'rgb(var(--copa-cream))',
+                    color: '#1a1a1a',
+                    border: isGroupComplete && activeGroup !== groupLetter ? '1px solid rgba(0,254,168,0.4)' : '1px solid transparent',
+                  }}
+                >
+                  {groupLetter}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Banner de reutilização de palpites */}
@@ -522,8 +601,8 @@ export default function PredictionsPage() {
         </motion.div>
       )}
 
-      {/* Carousel — clips horizontal overflow while allowing vertical page scroll */}
-      <div
+      {/* Carousel — grupos only */}
+      {activeSession === 'grupos' && <div
         className="overflow-hidden"
         onTouchStart={handleSwipeTouchStart}
         onTouchEnd={handleSwipeTouchEnd}
@@ -619,7 +698,6 @@ export default function PredictionsPage() {
             <div className="card overflow-hidden">
               {activeGroupGames.map((game, index) => {
                 const [score1, score2] = scores[game.id] ?? ['', '']
-                const isSaving = savingGames[game.id] ?? false
                 const matchDate = new Date(game.matchDate)
                 const dateStr = matchDate.toLocaleDateString('pt-BR', {
                   weekday: 'long',
@@ -757,7 +835,145 @@ export default function PredictionsPage() {
             )}
           </motion.div>
         </AnimatePresence>
-      </div>
+      </div>}
+
+      {/* Sessão 16 avos de final */}
+      {activeSession === 'R32' && (
+        <div className="px-5 pb-8 pt-4 space-y-3">
+          {isAllLocked && (
+            <div className="text-center py-2 px-3 rounded-xl bg-copa-menta/10 border border-copa-menta/30 text-copa-teal text-sm font-semibold">
+              Palpites dos 16 avos confirmados — somente visualização
+            </div>
+          )}
+
+          <div className="card overflow-hidden">
+            {r32Games.map((game, index) => {
+              const resolvedTeam1 = resolveTeamName(game.team1)
+              const resolvedTeam2 = resolveTeamName(game.team2)
+              const [score1, score2] = scores[game.id] ?? ['', '']
+              const matchDate = new Date(game.matchDate)
+              const dateStr = matchDate.toLocaleDateString('pt-BR', {
+                weekday: 'long', day: '2-digit', month: 'short',
+                hour: '2-digit', minute: '2-digit',
+                timeZone: 'America/Sao_Paulo',
+              })
+              const isPredictionLocked = lockedPredictions.get(game.id)?.isLocked ?? false
+              const isGameStarted = startedGames.has(game.id)
+              const isDisabled = isPredictionLocked || isGameStarted
+
+              return (
+                <div key={game.id}>
+                  {index > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}
+
+                  {isAllLocked ? (
+                    <div className="p-4">
+                      <div className="flex items-center justify-center gap-3">
+                        <div className="flex items-center gap-1.5 flex-1 justify-end">
+                          <span className="text-sm font-semibold text-copa-dark">
+                            {TEAM_ABBR[resolvedTeam1] ?? resolvedTeam1}
+                          </span>
+                          <img
+                            src={`/flags/${FLAG_CODES[resolvedTeam1] ?? FLAG_CODES[game.team1] ?? 'xx'}.png`}
+                            alt={resolvedTeam1}
+                            className="w-8 h-6 object-cover rounded-sm shrink-0"
+                          />
+                        </div>
+                        <span className="text-xl font-extrabold text-copa-dark tabular-nums shrink-0">
+                          {score1 !== '' && score2 !== '' ? `${score1} × ${score2}` : '– × –'}
+                        </span>
+                        <div className="flex items-center gap-1.5 flex-1">
+                          <img
+                            src={`/flags/${FLAG_CODES[resolvedTeam2] ?? FLAG_CODES[game.team2] ?? 'xx'}.png`}
+                            alt={resolvedTeam2}
+                            className="w-8 h-6 object-cover rounded-sm shrink-0"
+                          />
+                          <span className="text-sm font-semibold text-copa-dark">
+                            {TEAM_ABBR[resolvedTeam2] ?? resolvedTeam2}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 text-center mt-2">{dateStr}</p>
+                      {game.score1 !== null && (
+                        <div className="flex items-center justify-center gap-2 mt-1.5">
+                          <span className="text-xs font-medium" style={{ color: '#295A71' }}>
+                            Resultado: {game.score1} × {game.score2}
+                          </span>
+                          <PtsTag points={lockedPredictions.get(game.id)?.points} />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-1 justify-end">
+                          <span className={`text-sm font-semibold ${isGameStarted ? 'text-slate-400' : 'text-copa-dark'}`}>
+                            {TEAM_ABBR[resolvedTeam1] ?? resolvedTeam1}
+                          </span>
+                          <img
+                            src={`/flags/${FLAG_CODES[resolvedTeam1] ?? FLAG_CODES[game.team1] ?? 'xx'}.png`}
+                            alt={resolvedTeam1}
+                            className={`w-8 h-6 object-cover rounded-sm shrink-0 ${isGameStarted ? 'opacity-40' : ''}`}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <input
+                            ref={el => { score1Refs.current[game.id] = el }}
+                            type="text" inputMode="numeric" value={score1}
+                            onChange={e => handleScoreChange(game.id, 0, e.target.value)}
+                            onFocus={e => e.target.select()}
+                            disabled={isDisabled} placeholder="–"
+                            className="score-input w-11 h-11 text-center text-lg font-bold rounded-xl"
+                          />
+                          <span className="text-slate-600 font-bold text-base">×</span>
+                          <input
+                            ref={el => { score2Refs.current[game.id] = el }}
+                            type="text" inputMode="numeric" value={score2}
+                            onChange={e => handleScoreChange(game.id, 1, e.target.value)}
+                            onFocus={e => e.target.select()}
+                            disabled={isDisabled} placeholder="–"
+                            className="score-input w-11 h-11 text-center text-lg font-bold rounded-xl"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-1">
+                          <img
+                            src={`/flags/${FLAG_CODES[resolvedTeam2] ?? FLAG_CODES[game.team2] ?? 'xx'}.png`}
+                            alt={resolvedTeam2}
+                            className={`w-8 h-6 object-cover rounded-sm shrink-0 ${isGameStarted ? 'opacity-40' : ''}`}
+                          />
+                          <span className={`text-sm font-semibold ${isGameStarted ? 'text-slate-400' : 'text-copa-dark'}`}>
+                            {TEAM_ABBR[resolvedTeam2] ?? resolvedTeam2}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-center mt-2">
+                        {isGameStarted
+                          ? <span className="text-copa-red font-semibold">Jogo iniciado — sem pontuação</span>
+                          : <span className="text-slate-600">{dateStr}</span>
+                        }
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {allFilled && !isAllLocked && openGames.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {syncError && (
+                <p className="text-copa-red text-sm text-center font-semibold">{syncError}</p>
+              )}
+              <button
+                className="btn-primary"
+                onClick={handleClickConfirm}
+                disabled={validating}
+              >
+                {validating ? 'Verificando palpites...' : 'Confirmar palpites dos 16 avos'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

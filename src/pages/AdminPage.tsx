@@ -26,6 +26,7 @@ export default function AdminPage() {
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
   const [fetching, setFetching] = useState(false)
+  const [syncingBracket, setSyncingBracket] = useState(false)
   const [editTimeGameNumber, setEditTimeGameNumber] = useState('')
   const [editMatchDatePart, setEditMatchDatePart] = useState('')
   const [editMatchTimePart, setEditMatchTimePart] = useState('')
@@ -93,6 +94,22 @@ export default function AdminPage() {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
       setTimeError(msg || 'Erro ao atualizar horário')
+    }
+  }
+
+  async function handleSyncBracket() {
+    setSyncingBracket(true)
+    setError('')
+    setFeedback('')
+    try {
+      const { data } = await api.post('/admin/sync-bracket')
+      setFeedback(data.message)
+      refetch()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setError(msg || 'Erro ao sincronizar bracket')
+    } finally {
+      setSyncingBracket(false)
     }
   }
 
@@ -171,6 +188,19 @@ export default function AdminPage() {
             disabled={fetching}
           >
             {fetching ? 'Sincronizando...' : 'Sincronizar resultados'}
+          </button>
+        </div>
+
+        {/* Sync bracket */}
+        <div className="card p-5">
+          <h2 className="font-bold text-copa-dark mb-2">Atualizar bracket do mata-mata</h2>
+          <p className="text-slate-600 text-sm mb-4">Conforme os times avançam, atualiza automaticamente os nomes nas próximas fases (oitavas, quartas, semis, final).</p>
+          <button
+            className="btn-secondary"
+            onClick={handleSyncBracket}
+            disabled={syncingBracket}
+          >
+            {syncingBracket ? 'Atualizando...' : 'Atualizar bracket'}
           </button>
         </div>
 

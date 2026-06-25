@@ -5,11 +5,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import domtoimage from 'dom-to-image-more'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
-import { useBrazilDay } from '../hooks/useBrazilDay'
 import { RankingEntry, Game, Prediction, Pool, DailySummary, DailySummaryRankingEntry } from '../types'
 import FlagImage, { TEAM_ABBR, FLAG_CODES } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
 import ManageMembersModal from '../components/ManageMembersModal'
+import GamesTab from '../components/GamesTab'
 
 function LockIcon() {
   return (
@@ -78,132 +78,13 @@ function applyStandardRanking<T extends { totalPoints: number; exactScores: numb
   return sorted.map((item, i) => ({ ...item, position: positions[i] }))
 }
 
-interface GameCardProps {
-  game: Game
-  dateStr?: string
-  prediction?: Prediction
-  isAdmin?: boolean
-  onSaveResult?: (gameNumber: number, score1: number, score2: number) => Promise<void>
-}
-
-function GameCard({ game, dateStr, prediction, isAdmin, onSaveResult }: GameCardProps) {
-  const [editing, setEditing] = useState(false)
-  const [editScore1, setEditScore1] = useState(game.score1 !== null ? String(game.score1) : '')
-  const [editScore2, setEditScore2] = useState(game.score2 !== null ? String(game.score2) : '')
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState('')
-
-  async function handleSave() {
-    if (!onSaveResult || editScore1 === '' || editScore2 === '') return
-    setSaving(true)
-    setSaveError('')
-    try {
-      await onSaveResult(game.number, Number(editScore1), Number(editScore2))
-      setEditing(false)
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-      setSaveError(msg || 'Erro ao salvar')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="card p-3" style={{ borderRadius: 0 }}>
-      {dateStr && (
-        <p className="text-xs text-copa-gold font-bold text-center mb-2">
-          Grupo {game.group} · {dateStr}
-        </p>
-      )}
-      <div className="flex items-center justify-center gap-3">
-        <div className="flex items-center gap-1.5">
-          <FlagImage team={game.team1} size={16} className="shrink-0" />
-          <span className="text-sm font-semibold text-copa-dark">{TEAM_ABBR[game.team1] ?? game.team1}</span>
-        </div>
-        <span className="text-sm font-bold text-copa-dark px-1">
-          {game.score1 !== null ? `${game.score1} × ${game.score2}` : '-'}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-semibold text-copa-dark">{TEAM_ABBR[game.team2] ?? game.team2}</span>
-          <FlagImage team={game.team2} size={16} className="shrink-0" />
-        </div>
-        {isAdmin && !editing && (
-          <button
-            onClick={() => setEditing(true)}
-            className="ml-1 text-xs text-slate-400 hover:text-copa-gold transition-colors"
-            title="Editar resultado"
-          >
-            editar
-          </button>
-        )}
-      </div>
-
-      {editing && (
-        <div className="mt-3 pt-3 border-t border-copa-border">
-          <div className="flex items-center gap-2 justify-center">
-            <input
-              type="number"
-              min="0"
-              value={editScore1}
-              onChange={e => setEditScore1(e.target.value)}
-              className="score-input w-12 h-10 text-center text-lg font-bold rounded-xl"
-            />
-            <span className="text-slate-600 font-bold">×</span>
-            <input
-              type="number"
-              min="0"
-              value={editScore2}
-              onChange={e => setEditScore2(e.target.value)}
-              className="score-input w-12 h-10 text-center text-lg font-bold rounded-xl"
-            />
-            <button
-              onClick={handleSave}
-              disabled={saving || editScore1 === '' || editScore2 === ''}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold transition-opacity"
-              style={{ backgroundColor: '#FFD100', color: '#1a1a1a', opacity: saving ? 0.6 : 1 }}
-            >
-              {saving ? '...' : 'Salvar'}
-            </button>
-            <button
-              onClick={() => { setEditing(false); setSaveError('') }}
-              className="text-slate-400 text-xs"
-            >
-              Cancelar
-            </button>
-          </div>
-          {saveError && <p className="text-copa-red text-xs text-center mt-1">{saveError}</p>}
-        </div>
-      )}
-
-      {prediction && game.score1 !== null && (
-        <div className={`mt-2 text-center text-xs py-1 rounded-lg font-medium ${
-          prediction.points === 3
-            ? 'bg-copa-menta/15 text-copa-teal'
-            : prediction.points === 1
-            ? 'bg-copa-gold/15 text-copa-gold'
-            : 'bg-red-500/10 text-copa-red'
-        }`}>
-          Meu palpite: {prediction.score1} × {prediction.score2}
-        </div>
-      )}
-      {prediction && game.score1 === null && (
-        <p className="text-xs text-slate-600 text-center mt-2">
-          Meu palpite: {prediction.score1} × {prediction.score2}
-        </p>
-      )}
-    </div>
-  )
-}
 
 export default function RankingPage() {
   const { poolCode } = useParams<{ poolCode: string }>()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const isBrazilDay = useBrazilDay()
   const [activeTab, setActiveTab] = useState<'ranking' | 'games' | 'summary'>('ranking')
   const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null)
-  const [upcomingExpanded, setUpcomingExpanded] = useState(true)
-  const [resultsExpanded, setResultsExpanded] = useState(true)
   const todayBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const [summaryDate, setSummaryDate] = useState(() => todayBRT)
   const [sharing, setSharing] = useState(false)
@@ -270,6 +151,7 @@ export default function RankingPage() {
       setLiveScores(liveMap)
       setLiveSyncError(null)
       queryClient.invalidateQueries({ queryKey: ['daily-summary', poolCode, summaryDate] })
+      queryClient.invalidateQueries({ queryKey: ['games'] })
       return data.liveScores.length as number
     } catch (err) {
       setLiveSyncError(err instanceof Error ? err.message : String(err))
@@ -384,6 +266,13 @@ export default function RankingPage() {
       const { data } = await api.get('/games')
       return data.games as Game[]
     },
+    refetchInterval: (query) => {
+      const games = query.state.data
+      if (!games) return false
+      const now = new Date()
+      const hasLiveGame = games.some(g => g.score1 === null && new Date(g.matchDate) <= now)
+      return hasLiveGame ? 60_000 : false
+    },
   })
 
   const { data: poolData } = useQuery({
@@ -420,9 +309,6 @@ export default function RankingPage() {
   const filledCount = predictionsData?.length ?? 0
   const isAllLocked = (predictionsData?.some(p => p.isLocked) ?? false)
 
-  const upcomingGames = gamesData?.filter(g => g.score1 === null) ?? []
-  const finishedGames = gamesData?.filter(g => g.score1 !== null) ?? []
-
   const activeData = selectedGameNumber !== null ? gameRankingData : summaryData
   const visibleGames = activeData?.games ?? []
   const visibleRanking = activeData?.ranking ?? []
@@ -430,6 +316,39 @@ export default function RankingPage() {
   const isSummaryLoading = summaryLoading || (selectedGameNumber !== null && gameRankingLoading)
 
   const hasUnfinishedGames = visibleGames.some(g => (g.score1 as number | null) === null)
+
+  const resolveKnockoutTeam = useMemo(() => {
+    return (name: string): string => {
+      const match = name.match(/^(\d+)º Grupo ([A-L])$/)
+      if (!match) return name
+      const pos = parseInt(match[1], 10)
+      const group = match[2]
+      if (!gamesData) return name
+      const groupGames = gamesData.filter(g => g.group === group && g.number < 73)
+      const teamsMap = new Map<string, { pts: number; gd: number; gf: number }>()
+      for (const g of groupGames) {
+        for (const team of [g.team1, g.team2]) {
+          if (!teamsMap.has(team)) teamsMap.set(team, { pts: 0, gd: 0, gf: 0 })
+        }
+        if (g.score1 === null || g.score2 === null) continue
+        const s1 = g.score1 as number
+        const s2 = g.score2 as number
+        const t1 = teamsMap.get(g.team1)!
+        const t2 = teamsMap.get(g.team2)!
+        t1.gf += s1; t1.gd += s1 - s2
+        t2.gf += s2; t2.gd += s2 - s1
+        if (s1 > s2) { t1.pts += 3 }
+        else if (s1 === s2) { t1.pts += 1; t2.pts += 1 }
+        else { t2.pts += 3 }
+      }
+      const sorted = [...teamsMap.entries()]
+        .sort(([nameA, a], [nameB, b]) =>
+          b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || nameA.localeCompare(nameB)
+        )
+        .map(([team]) => team)
+      return sorted[pos - 1] ?? name
+    }
+  }, [gamesData])
 
   useEffect(() => {
     if (!hasUnfinishedGames) setSimulatorMode(false)
@@ -764,7 +683,7 @@ export default function RankingPage() {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                {hasUnfinishedGames && !isSummaryLoading && (
+                {hasUnfinishedGames && !isSummaryLoading && visibleGames.some(g => g.predictions.some(p => p.score1 !== null)) && (
                   <button
                     onClick={() => setSimulatorMode(v => !v)}
                     className={`text-sm font-semibold px-4 py-1.5 rounded-full border transition-colors ${
@@ -965,17 +884,17 @@ export default function RankingPage() {
 
                             <tr style={{ borderBottom: '1px solid #D9CBAD' }}>
                               <td style={{ textAlign: 'right', paddingTop: 10, paddingBottom: 10, paddingLeft: 16, paddingRight: 8, whiteSpace: 'nowrap' }}>
-                                {FLAG_CODES[game.team1] && (
+                                {FLAG_CODES[resolveKnockoutTeam(game.team1)] && (
                                   <img
-                                    src={`/flags/${FLAG_CODES[game.team1]}.png`}
+                                    src={`/flags/${FLAG_CODES[resolveKnockoutTeam(game.team1)]}.png`}
                                     crossOrigin="anonymous"
-                                    width={FLAG_CODES[game.team1] === 'ch' ? 14 : 21}
+                                    width={FLAG_CODES[resolveKnockoutTeam(game.team1)] === 'ch' ? 14 : 21}
                                     height={14}
                                     style={{ verticalAlign: 'middle', marginRight: 4, display: 'inline' }}
                                   />
                                 )}
                                 <span style={{ fontWeight: 700, fontSize: 13, color: '#1a1a1a', verticalAlign: 'middle' }}>
-                                  {TEAM_ABBR[game.team1] ?? game.team1}
+                                  {TEAM_ABBR[resolveKnockoutTeam(game.team1)] ?? resolveKnockoutTeam(game.team1)}
                                 </span>
                               </td>
                               <td style={{ textAlign: 'center', paddingTop: 10, paddingBottom: 10, paddingLeft: 6, paddingRight: 6, width: 80, whiteSpace: 'nowrap', fontSize: 22, fontWeight: 900, color: hasLiveScore ? '#e63946' : hasSimScore ? '#295A71' : '#1a1a1a' }}>
@@ -989,13 +908,13 @@ export default function RankingPage() {
                               </td>
                               <td style={{ textAlign: 'left', paddingTop: 10, paddingBottom: 10, paddingLeft: 8, paddingRight: 16, whiteSpace: 'nowrap' }}>
                                 <span style={{ fontWeight: 700, fontSize: 13, color: '#1a1a1a', verticalAlign: 'middle' }}>
-                                  {TEAM_ABBR[game.team2] ?? game.team2}
+                                  {TEAM_ABBR[resolveKnockoutTeam(game.team2)] ?? resolveKnockoutTeam(game.team2)}
                                 </span>
-                                {FLAG_CODES[game.team2] && (
+                                {FLAG_CODES[resolveKnockoutTeam(game.team2)] && (
                                   <img
-                                    src={`/flags/${FLAG_CODES[game.team2]}.png`}
+                                    src={`/flags/${FLAG_CODES[resolveKnockoutTeam(game.team2)]}.png`}
                                     crossOrigin="anonymous"
-                                    width={FLAG_CODES[game.team2] === 'ch' ? 14 : 21}
+                                    width={FLAG_CODES[resolveKnockoutTeam(game.team2)] === 'ch' ? 14 : 21}
                                     height={14}
                                     style={{ verticalAlign: 'middle', marginLeft: 4, display: 'inline' }}
                                   />
@@ -1003,7 +922,7 @@ export default function RankingPage() {
                               </td>
                             </tr>
 
-                            {sortedPredictions.map((pred, idx) => {
+                            {sortedPredictions.some(p => p.score1 !== null) && sortedPredictions.map((pred, idx) => {
                               let bgColor = 'transparent'
                               let ptsColor = '#e63946'
                               let ptsLabel = ''
@@ -1045,7 +964,7 @@ export default function RankingPage() {
                     )
                   })}
 
-                  {visibleGames.length > 0 && !simulatorMode && (
+                  {visibleGames.length > 0 && !simulatorMode && visibleGames.some(g => g.predictions.some(p => p.score1 !== null)) && (
                     <div style={{ backgroundColor: '#FFFDF5', border: `1px solid ${liveRanking ? '#e63946' : '#D9CBAD'}`, borderRadius: 0, overflow: 'hidden' }}>
                       <div style={{ borderBottom: '1px solid #D9CBAD', padding: '10px 16px' }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -1153,64 +1072,12 @@ export default function RankingPage() {
 
         {activeTab === 'games' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            {upcomingGames.length > 0 && (
-              <div className="mb-4">
-                <button
-                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
-                  onClick={() => setUpcomingExpanded(v => !v)}
-                >
-                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Próximos jogos <span className="text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>({upcomingGames.length})</span></span>
-                  <span className="text-xl leading-none text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>{upcomingExpanded ? '▾' : '▸'}</span>
-                </button>
-                {upcomingExpanded && (
-                  <div className="space-y-2">
-                    {upcomingGames.map(game => {
-                      const prediction = myPredictions.get(game.id)
-                      const matchDate = new Date(game.matchDate)
-                      const dateStr = matchDate.toLocaleString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
-                      return (
-                        <GameCard
-                          key={game.id}
-                          game={game}
-                          dateStr={dateStr}
-                          prediction={prediction}
-                          isAdmin={user?.isAdmin}
-                          onSaveResult={handleSaveResult}
-                        />
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {finishedGames.length > 0 && (
-              <div>
-                <button
-                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
-                  onClick={() => setResultsExpanded(v => !v)}
-                >
-                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Resultados <span className="text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>({finishedGames.length})</span></span>
-                  <span className="text-xl leading-none text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>{resultsExpanded ? '▾' : '▸'}</span>
-                </button>
-                {resultsExpanded && (
-                  <div className="space-y-2">
-                    {finishedGames.map(game => {
-                      const prediction = myPredictions.get(game.id)
-                      return (
-                        <GameCard
-                          key={game.id}
-                          game={game}
-                          prediction={prediction}
-                          isAdmin={user?.isAdmin}
-                          onSaveResult={handleSaveResult}
-                        />
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+            <GamesTab
+              gamesData={gamesData ?? []}
+              isAdmin={user?.isAdmin}
+              myPredictions={myPredictions}
+              onSaveResult={handleSaveResult}
+            />
           </motion.div>
         )}
       </div>
