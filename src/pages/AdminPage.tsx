@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { Game } from '../types'
@@ -20,6 +20,7 @@ function saoPauloInputToUtc(brtValue: string): string {
 export default function AdminPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [gameNumber, setGameNumber] = useState('')
   const [score1, setScore1] = useState('')
   const [score2, setScore2] = useState('')
@@ -32,6 +33,25 @@ export default function AdminPage() {
   const [editMatchTimePart, setEditMatchTimePart] = useState('')
   const [timeFeedback, setTimeFeedback] = useState('')
   const [timeError, setTimeError] = useState('')
+  const [togglingStats, setTogglingStats] = useState(false)
+
+  const { data: featureFlags } = useQuery({
+    queryKey: ['features'],
+    queryFn: async () => {
+      const { data } = await api.get('/admin/features')
+      return data as { statsEnabled: boolean }
+    },
+  })
+
+  async function handleToggleStats() {
+    setTogglingStats(true)
+    try {
+      await api.post('/admin/features', { statsEnabled: !featureFlags?.statsEnabled })
+      await queryClient.invalidateQueries({ queryKey: ['features'] })
+    } finally {
+      setTogglingStats(false)
+    }
+  }
 
   const { data: gamesData, refetch } = useQuery({
     queryKey: ['games-admin'],
@@ -296,6 +316,28 @@ export default function AdminPage() {
               <span className="text-copa-gold font-bold text-sm">{game.score1} x {game.score2}</span>
             </div>
           ))}
+        </div>
+
+        {/* Feature flags */}
+        <div className="card p-5">
+          <h2 className="font-bold text-copa-dark mb-1">Funcionalidades</h2>
+          <p className="text-slate-600 text-xs mb-4">Ative ou desative funcionalidades para todos os participantes.</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-copa-dark">Aba Projeção</p>
+              <p className="text-xs text-slate-500 mt-0.5">Análise de chances de cada participante</p>
+            </div>
+            <button
+              onClick={handleToggleStats}
+              disabled={togglingStats}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${featureFlags?.statsEnabled ? 'bg-copa-teal' : 'bg-slate-300'}`}
+              style={{ opacity: togglingStats ? 0.6 : 1 }}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${featureFlags?.statsEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+              />
+            </button>
+          </div>
         </div>
       </div>
     </div>
