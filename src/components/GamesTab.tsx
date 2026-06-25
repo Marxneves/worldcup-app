@@ -183,11 +183,8 @@ function GroupTable({ group, teams, onClick }: { group: string; teams: TeamStat[
   const groupFinished = teams.every(t => t.played === 3)
 
   return (
-    <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden' }}>
-      <button
-        onClick={onClick}
-        style={{ width: '100%', backgroundColor: '#F5EDD0', padding: '6px 10px', borderBottom: '1px solid #D9CBAD', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', border: 'none' }}
-      >
+    <div onClick={onClick} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden', cursor: 'pointer' }}>
+      <div style={{ backgroundColor: '#F5EDD0', padding: '6px 10px', borderBottom: '1px solid #D9CBAD' }}>
         <span style={{ fontSize: 11, fontWeight: 800, color: '#295A71', textTransform: 'uppercase', letterSpacing: 1 }}>
           Grupo {group}
           {groupFinished && (
@@ -196,8 +193,7 @@ function GroupTable({ group, teams, onClick }: { group: string; teams: TeamStat[
             </span>
           )}
         </span>
-        <span style={{ fontSize: 10, color: '#295A71', fontWeight: 700 }}>Jogos ▸</span>
-      </button>
+      </div>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ borderBottom: '1px solid #D9CBAD' }}>
