@@ -1214,30 +1214,20 @@ export default function RankingPage() {
                         </div>
 
                         {rankingStats.remainingGamesCount > 0 && member.podiumOdds && (
-                          <div className="border-t border-slate-100 pt-2 mt-2">
-                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" style={{ letterSpacing: '0.06em', fontSize: 10 }}>
-                              Probabilidade de pódio {!rankingStats.hasOdds && <span className="normal-case font-normal">(sem odds — aprox.)</span>}
-                            </div>
-                            <div className="flex gap-2">
-                              {[
-                                { label: '1º', value: member.podiumOdds.first, bg: '#FFD100', text: '#1a1a1a' },
-                                { label: '2º', value: member.podiumOdds.second, bg: '#94a3b8', text: '#fff' },
-                                { label: '3º', value: member.podiumOdds.third, bg: '#c97c3a', text: '#fff' },
-                              ].map(({ label, value, bg, text }) => (
-                                <div key={label} className="flex-1 rounded-lg py-2 px-1 text-center" style={{ backgroundColor: value > 0 ? bg : '#f1f5f9' }}>
-                                  <div className="text-xs font-bold" style={{ color: value > 0 ? text : '#94a3b8' }}>{label}</div>
-                                  <div className="text-sm font-extrabold tabular-nums" style={{ color: value > 0 ? text : '#94a3b8' }}>
-                                    {value > 0 ? `${value}%` : '—'}
-                                  </div>
-                                </div>
-                              ))}
-                              <div className="flex-1 rounded-lg py-2 px-1 text-center bg-copa-menta/20">
-                                <div className="text-xs font-bold text-copa-teal">Top 3</div>
-                                <div className="text-sm font-extrabold tabular-nums text-copa-teal">
-                                  {member.podiumOdds.top3 > 0 ? `${member.podiumOdds.top3}%` : '—'}
-                                </div>
-                              </div>
-                            </div>
+                          <div className="border-t border-slate-100 pt-2 mt-2 flex items-center gap-3">
+                            <span className="text-slate-400 shrink-0" style={{ fontSize: 10 }}>
+                              pódio{!rankingStats.hasOdds ? '*' : ''}
+                            </span>
+                            {[
+                              { label: '1º', value: member.podiumOdds.first, color: '#B8960A' },
+                              { label: '2º', value: member.podiumOdds.second, color: '#64748b' },
+                              { label: '3º', value: member.podiumOdds.third, color: '#9a6027' },
+                            ].map(({ label, value, color }) => (
+                              <span key={label} className="text-xs tabular-nums" style={{ color: value > 0 ? color : '#cbd5e1' }}>
+                                <span className="font-semibold">{label}</span>{' '}
+                                <span className="font-bold">{value > 0 ? `${value}%` : '—'}</span>
+                              </span>
+                            ))}
                           </div>
                         )}
 
