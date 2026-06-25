@@ -1154,8 +1154,12 @@ export default function RankingPage() {
                   {rankingStats.members.map((member) => {
                     const maxPoints = member.currentPoints + member.maxAdditionalPoints
                     const vsLeader = member.opponents.find(o => o.currentRank === 1)
-                    const canWin = member.position === 1 || (vsLeader?.canOvertake ?? false)
-                    const canReachTop3 = member.bestPossibleRank <= 3
+                    const canWin = member.position === 1 || (
+                      (vsLeader?.canOvertake ?? false) &&
+                      (member.podiumOdds === null || member.podiumOdds.first > 0)
+                    )
+                    const canReachTop3 = member.bestPossibleRank <= 3 &&
+                      (member.podiumOdds === null || member.podiumOdds.top3 > 0)
 
                     const barPct = Math.round((member.currentPoints / maxPossibleAll) * 100)
                     const maxBarPct = Math.round((maxPoints / maxPossibleAll) * 100)
