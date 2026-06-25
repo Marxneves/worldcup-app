@@ -5,11 +5,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import domtoimage from 'dom-to-image-more'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
-import { useBrazilDay } from '../hooks/useBrazilDay'
 import { RankingEntry, Game, Prediction, Pool, DailySummary, DailySummaryRankingEntry } from '../types'
 import FlagImage, { TEAM_ABBR, FLAG_CODES } from '../components/FlagImage'
 import CopyButton from '../components/CopyButton'
 import ManageMembersModal from '../components/ManageMembersModal'
+import GamesTab from '../components/GamesTab'
 
 function LockIcon() {
   return (
@@ -78,132 +78,13 @@ function applyStandardRanking<T extends { totalPoints: number; exactScores: numb
   return sorted.map((item, i) => ({ ...item, position: positions[i] }))
 }
 
-interface GameCardProps {
-  game: Game
-  dateStr?: string
-  prediction?: Prediction
-  isAdmin?: boolean
-  onSaveResult?: (gameNumber: number, score1: number, score2: number) => Promise<void>
-}
-
-function GameCard({ game, dateStr, prediction, isAdmin, onSaveResult }: GameCardProps) {
-  const [editing, setEditing] = useState(false)
-  const [editScore1, setEditScore1] = useState(game.score1 !== null ? String(game.score1) : '')
-  const [editScore2, setEditScore2] = useState(game.score2 !== null ? String(game.score2) : '')
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState('')
-
-  async function handleSave() {
-    if (!onSaveResult || editScore1 === '' || editScore2 === '') return
-    setSaving(true)
-    setSaveError('')
-    try {
-      await onSaveResult(game.number, Number(editScore1), Number(editScore2))
-      setEditing(false)
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-      setSaveError(msg || 'Erro ao salvar')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="card p-3" style={{ borderRadius: 0 }}>
-      {dateStr && (
-        <p className="text-xs text-copa-gold font-bold text-center mb-2">
-          Grupo {game.group} · {dateStr}
-        </p>
-      )}
-      <div className="flex items-center justify-center gap-3">
-        <div className="flex items-center gap-1.5">
-          <FlagImage team={game.team1} size={16} className="shrink-0" />
-          <span className="text-sm font-semibold text-copa-dark">{TEAM_ABBR[game.team1] ?? game.team1}</span>
-        </div>
-        <span className="text-sm font-bold text-copa-dark px-1">
-          {game.score1 !== null ? `${game.score1} × ${game.score2}` : '-'}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-semibold text-copa-dark">{TEAM_ABBR[game.team2] ?? game.team2}</span>
-          <FlagImage team={game.team2} size={16} className="shrink-0" />
-        </div>
-        {isAdmin && !editing && (
-          <button
-            onClick={() => setEditing(true)}
-            className="ml-1 text-xs text-slate-400 hover:text-copa-gold transition-colors"
-            title="Editar resultado"
-          >
-            editar
-          </button>
-        )}
-      </div>
-
-      {editing && (
-        <div className="mt-3 pt-3 border-t border-copa-border">
-          <div className="flex items-center gap-2 justify-center">
-            <input
-              type="number"
-              min="0"
-              value={editScore1}
-              onChange={e => setEditScore1(e.target.value)}
-              className="score-input w-12 h-10 text-center text-lg font-bold rounded-xl"
-            />
-            <span className="text-slate-600 font-bold">×</span>
-            <input
-              type="number"
-              min="0"
-              value={editScore2}
-              onChange={e => setEditScore2(e.target.value)}
-              className="score-input w-12 h-10 text-center text-lg font-bold rounded-xl"
-            />
-            <button
-              onClick={handleSave}
-              disabled={saving || editScore1 === '' || editScore2 === ''}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold transition-opacity"
-              style={{ backgroundColor: '#FFD100', color: '#1a1a1a', opacity: saving ? 0.6 : 1 }}
-            >
-              {saving ? '...' : 'Salvar'}
-            </button>
-            <button
-              onClick={() => { setEditing(false); setSaveError('') }}
-              className="text-slate-400 text-xs"
-            >
-              Cancelar
-            </button>
-          </div>
-          {saveError && <p className="text-copa-red text-xs text-center mt-1">{saveError}</p>}
-        </div>
-      )}
-
-      {prediction && game.score1 !== null && (
-        <div className={`mt-2 text-center text-xs py-1 rounded-lg font-medium ${
-          prediction.points === 3
-            ? 'bg-copa-menta/15 text-copa-teal'
-            : prediction.points === 1
-            ? 'bg-copa-gold/15 text-copa-gold'
-            : 'bg-red-500/10 text-copa-red'
-        }`}>
-          Meu palpite: {prediction.score1} × {prediction.score2}
-        </div>
-      )}
-      {prediction && game.score1 === null && (
-        <p className="text-xs text-slate-600 text-center mt-2">
-          Meu palpite: {prediction.score1} × {prediction.score2}
-        </p>
-      )}
-    </div>
-  )
-}
 
 export default function RankingPage() {
   const { poolCode } = useParams<{ poolCode: string }>()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const isBrazilDay = useBrazilDay()
   const [activeTab, setActiveTab] = useState<'ranking' | 'games' | 'summary'>('ranking')
   const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null)
-  const [upcomingExpanded, setUpcomingExpanded] = useState(true)
-  const [resultsExpanded, setResultsExpanded] = useState(true)
   const todayBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const [summaryDate, setSummaryDate] = useState(() => todayBRT)
   const [sharing, setSharing] = useState(false)
@@ -419,9 +300,6 @@ export default function RankingPage() {
   const totalGames = gamesData?.length ?? 0
   const filledCount = predictionsData?.length ?? 0
   const isAllLocked = (predictionsData?.some(p => p.isLocked) ?? false)
-
-  const upcomingGames = gamesData?.filter(g => g.score1 === null) ?? []
-  const finishedGames = gamesData?.filter(g => g.score1 !== null) ?? []
 
   const activeData = selectedGameNumber !== null ? gameRankingData : summaryData
   const visibleGames = activeData?.games ?? []
@@ -1153,64 +1031,12 @@ export default function RankingPage() {
 
         {activeTab === 'games' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            {upcomingGames.length > 0 && (
-              <div className="mb-4">
-                <button
-                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
-                  onClick={() => setUpcomingExpanded(v => !v)}
-                >
-                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Próximos jogos <span className="text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>({upcomingGames.length})</span></span>
-                  <span className="text-xl leading-none text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>{upcomingExpanded ? '▾' : '▸'}</span>
-                </button>
-                {upcomingExpanded && (
-                  <div className="space-y-2">
-                    {upcomingGames.map(game => {
-                      const prediction = myPredictions.get(game.id)
-                      const matchDate = new Date(game.matchDate)
-                      const dateStr = matchDate.toLocaleString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
-                      return (
-                        <GameCard
-                          key={game.id}
-                          game={game}
-                          dateStr={dateStr}
-                          prediction={prediction}
-                          isAdmin={user?.isAdmin}
-                          onSaveResult={handleSaveResult}
-                        />
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {finishedGames.length > 0 && (
-              <div>
-                <button
-                  className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-copa-dark mb-3 py-1"
-                  onClick={() => setResultsExpanded(v => !v)}
-                >
-                  <span style={{ color: isBrazilDay ? '#000080' : undefined }}>Resultados <span className="text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>({finishedGames.length})</span></span>
-                  <span className="text-xl leading-none text-copa-gold" style={{ color: isBrazilDay ? '#009C3B' : undefined }}>{resultsExpanded ? '▾' : '▸'}</span>
-                </button>
-                {resultsExpanded && (
-                  <div className="space-y-2">
-                    {finishedGames.map(game => {
-                      const prediction = myPredictions.get(game.id)
-                      return (
-                        <GameCard
-                          key={game.id}
-                          game={game}
-                          prediction={prediction}
-                          isAdmin={user?.isAdmin}
-                          onSaveResult={handleSaveResult}
-                        />
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+            <GamesTab
+              gamesData={gamesData ?? []}
+              isAdmin={user?.isAdmin}
+              myPredictions={myPredictions}
+              onSaveResult={handleSaveResult}
+            />
           </motion.div>
         )}
       </div>
