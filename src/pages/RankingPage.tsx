@@ -1153,14 +1153,7 @@ export default function RankingPage() {
                   </div>
                   {rankingStats.members.map((member) => {
                     const maxPoints = member.currentPoints + member.maxAdditionalPoints
-                    const vsLeader = member.opponents.find(o => o.currentRank === 1)
-                    const canWin = member.position === 1 || (
-                      (vsLeader?.canOvertake ?? false) &&
-                      (member.podiumOdds === null || member.podiumOdds.first > 0)
-                    )
-                    const canReachTop3 = member.bestPossibleRank <= 3 &&
-                      (member.podiumOdds === null || member.podiumOdds.top3 > 0)
-
+                    const odds = member.podiumOdds
                     const barPct = Math.round((member.currentPoints / maxPossibleAll) * 100)
                     const maxBarPct = Math.round((maxPoints / maxPossibleAll) * 100)
 
@@ -1171,12 +1164,16 @@ export default function RankingPage() {
                       statusLabel = '1º lugar'
                       statusBg = 'bg-copa-gold/25'
                       statusText = 'text-amber-700'
-                    } else if (canWin) {
+                    } else if (odds ? odds.first > 0 : member.opponents.find(o => o.currentRank === 1)?.canOvertake) {
                       statusLabel = 'Pode vencer'
                       statusBg = 'bg-copa-menta/20'
                       statusText = 'text-copa-teal'
-                    } else if (canReachTop3) {
-                      statusLabel = `Pode chegar top ${member.bestPossibleRank}`
+                    } else if (odds ? odds.second > 0 : member.bestPossibleRank <= 2) {
+                      statusLabel = 'Pode chegar 2º'
+                      statusBg = 'bg-blue-50'
+                      statusText = 'text-blue-700'
+                    } else if (odds ? odds.third > 0 : member.bestPossibleRank <= 3) {
+                      statusLabel = 'Pode chegar 3º'
                       statusBg = 'bg-blue-50'
                       statusText = 'text-blue-700'
                     } else {
@@ -1220,7 +1217,7 @@ export default function RankingPage() {
                         {rankingStats.remainingGamesCount > 0 && member.podiumOdds && (
                           <div className="border-t border-slate-100 pt-2 mt-2 flex items-center gap-3">
                             <span className="text-slate-400 shrink-0" style={{ fontSize: 10 }}>
-                              pódio{!rankingStats.hasOdds ? '*' : ''}
+                              prob.{!rankingStats.hasOdds ? '*' : ''}
                             </span>
                             {[
                               { label: '1º', value: member.podiumOdds.first, color: '#B8960A' },
@@ -1232,33 +1229,6 @@ export default function RankingPage() {
                                 <span className="font-bold">{value > 0 ? `${value}%` : '—'}</span>
                               </span>
                             ))}
-                          </div>
-                        )}
-
-                        {member.position > 1 && (
-                          <div className="border-t border-slate-100 pt-2 mt-2">
-                            <div className="flex items-center justify-between text-xs mb-2">
-                              <span className="text-slate-500 font-semibold">Melhor posição possível</span>
-                              <span className="font-bold text-copa-dark">{member.bestPossibleRank}º lugar</span>
-                            </div>
-                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5" style={{ letterSpacing: '0.06em', fontSize: 10 }}>
-                              Comparação com membros à frente
-                            </div>
-                            <div className="space-y-1">
-                              {member.opponents
-                                .filter(o => o.gap > 0)
-                                .sort((a, b) => a.gap - b.gap)
-                                .map(opponent => (
-                                  <div key={opponent.userId} className="flex items-center gap-2 text-xs">
-                                    <span className="text-copa-teal font-bold w-5 shrink-0">{opponent.currentRank}º</span>
-                                    <span className="text-copa-dark font-semibold flex-1 truncate">{opponent.name}</span>
-                                    <span className="text-slate-500 shrink-0">{opponent.gap} atrás</span>
-                                    <span className={`font-bold shrink-0 ${opponent.canOvertake ? 'text-copa-teal' : 'text-copa-red'}`}>
-                                      {opponent.canOvertake ? '✓' : '✗'}
-                                    </span>
-                                  </div>
-                                ))}
-                            </div>
                           </div>
                         )}
                       </div>
