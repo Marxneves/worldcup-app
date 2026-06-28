@@ -140,7 +140,7 @@ export default function PredictionsPage() {
   const [syncError, setSyncError] = useState('')
   const [importing, setImporting] = useState(false)
   const [now, setNow] = useState(() => new Date())
-  const [activeSession, setActiveSession] = useState<'grupos' | 'R32'>('grupos')
+  const [activeSession, setActiveSession] = useState<'grupos' | 'R32' | 'R16'>('grupos')
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -260,7 +260,9 @@ export default function PredictionsPage() {
     if (team === 1 && digits.length >= 1 && games) {
       const navGames = activeSession === 'R32'
         ? r32Games
-        : games.filter(g => g.group === activeGroup).sort((a, b) => a.number - b.number)
+        : activeSession === 'R16'
+          ? r16Games
+          : games.filter(g => g.group === activeGroup).sort((a, b) => a.number - b.number)
       const currentIdx = navGames.findIndex(g => g.id === gameId)
       const nextGame = navGames[currentIdx + 1]
       if (nextGame) {
@@ -364,7 +366,16 @@ export default function PredictionsPage() {
   )
   const showR32Session = r32Games.length > 0
 
+  const r16Games = useMemo(() =>
+    (games ?? [])
+      .filter(g => g.group === 'R16')
+      .sort((a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime()),
+    [games]
+  )
+  const showR16Session = r16Games.length > 0 && r32Games.length === 16 && r32Games.every(g => g.score1 !== null)
+
   const r32GameIds = useMemo(() => new Set(r32Games.map(g => g.id)), [r32Games])
+  const r16GameIds = useMemo(() => new Set(r16Games.map(g => g.id)), [r16Games])
 
   const resolveTeamName = useCallback((name: string): string => {
     if (!games) return name
@@ -423,7 +434,12 @@ export default function PredictionsPage() {
 
   const groupOpenGames = games.filter(g => g.number <= 72 && new Date(g.matchDate) > now)
   const openR32Games = r32Games.filter(g => new Date(g.matchDate) > now)
-  const openGames = activeSession === 'R32' ? openR32Games : groupOpenGames
+  const openR16Games = r16Games.filter(g => new Date(g.matchDate) > now)
+  const openGames = activeSession === 'R32'
+    ? openR32Games
+    : activeSession === 'R16'
+      ? openR16Games
+      : groupOpenGames
 
   const filledCount = Object.values(scores).filter(
     ([score1, score2]) => score1 !== '' && score2 !== ''
@@ -437,16 +453,19 @@ export default function PredictionsPage() {
   const allFilled = openGames.length > 0
     ? openFilledCount === openGames.length
     : filledCount > 0
-  const isGroupsLocked = savedPredictions?.some(p => p.isLocked && !r32GameIds.has(p.gameId)) ?? false
+  const isGroupsLocked = savedPredictions?.some(p => p.isLocked && !r32GameIds.has(p.gameId) && !r16GameIds.has(p.gameId)) ?? false
   const isR32Locked = savedPredictions?.filter(p => r32GameIds.has(p.gameId)).some(p => p.isLocked) ?? false
-  const isAllLocked = activeSession === 'R32' ? isR32Locked : isGroupsLocked
+  const isR16Locked = savedPredictions?.filter(p => r16GameIds.has(p.gameId)).some(p => p.isLocked) ?? false
+  const isAllLocked = activeSession === 'R32' ? isR32Locked : activeSession === 'R16' ? isR16Locked : isGroupsLocked
 
   const startedGamesList = (activeSession === 'R32'
     ? r32Games
-    : games.filter(g => g.number <= 72)
+    : activeSession === 'R16'
+      ? r16Games
+      : games.filter(g => g.number <= 72)
   ).filter(g => startedGames.has(g.id))
 
-  const sessionLabel = activeSession === 'R32' ? '16 avos de final' : 'fase de grupos'
+  const sessionLabel = activeSession === 'R32' ? '16 avos de final' : activeSession === 'R16' ? 'oitavas de final' : 'fase de grupos'
 
   if (showConfirm) {
     return (
@@ -514,7 +533,7 @@ export default function PredictionsPage() {
           </span>
         </div>
 
-        {showR32Session && (
+        {(showR32Session || showR16Session) && (
           <div className="flex gap-2 mb-3">
             <button
               onClick={() => setActiveSession('grupos')}
@@ -525,19 +544,34 @@ export default function PredictionsPage() {
                 border: `1px solid ${activeSession === 'grupos' ? 'transparent' : '#D9CBAD'}`,
               }}
             >
-              Fase de Grupos
+              Grupos
             </button>
-            <button
-              onClick={() => setActiveSession('R32')}
-              className="flex-1 py-1.5 text-sm font-bold rounded-lg transition-all"
-              style={{
-                backgroundColor: activeSession === 'R32' ? '#FFD100' : 'transparent',
-                color: '#1a1a1a',
-                border: `1px solid ${activeSession === 'R32' ? 'transparent' : '#D9CBAD'}`,
-              }}
-            >
-              16 avos
-            </button>
+            {showR32Session && (
+              <button
+                onClick={() => setActiveSession('R32')}
+                className="flex-1 py-1.5 text-sm font-bold rounded-lg transition-all"
+                style={{
+                  backgroundColor: activeSession === 'R32' ? '#FFD100' : 'transparent',
+                  color: '#1a1a1a',
+                  border: `1px solid ${activeSession === 'R32' ? 'transparent' : '#D9CBAD'}`,
+                }}
+              >
+                16 avos
+              </button>
+            )}
+            {showR16Session && (
+              <button
+                onClick={() => setActiveSession('R16')}
+                className="flex-1 py-1.5 text-sm font-bold rounded-lg transition-all"
+                style={{
+                  backgroundColor: activeSession === 'R16' ? '#FFD100' : 'transparent',
+                  color: '#1a1a1a',
+                  border: `1px solid ${activeSession === 'R16' ? 'transparent' : '#D9CBAD'}`,
+                }}
+              >
+                Oitavas
+              </button>
+            )}
           </div>
         )}
 
@@ -836,6 +870,144 @@ export default function PredictionsPage() {
           </motion.div>
         </AnimatePresence>
       </div>}
+
+      {/* Sessão oitavas de final */}
+      {activeSession === 'R16' && (
+        <div className="px-5 pb-8 pt-4 space-y-3">
+          {isAllLocked && (
+            <div className="text-center py-2 px-3 rounded-xl bg-copa-menta/10 border border-copa-menta/30 text-copa-teal text-sm font-semibold">
+              Palpites das oitavas confirmados — somente visualização
+            </div>
+          )}
+
+          <div className="card overflow-hidden">
+            {r16Games.map((game, index) => {
+              const resolvedTeam1 = resolveTeamName(game.team1)
+              const resolvedTeam2 = resolveTeamName(game.team2)
+              const [score1, score2] = scores[game.id] ?? ['', '']
+              const matchDate = new Date(game.matchDate)
+              const dateStr = matchDate.toLocaleDateString('pt-BR', {
+                weekday: 'long', day: '2-digit', month: 'short',
+                hour: '2-digit', minute: '2-digit',
+                timeZone: 'America/Sao_Paulo',
+              })
+              const isPredictionLocked = lockedPredictions.get(game.id)?.isLocked ?? false
+              const isGameStarted = startedGames.has(game.id)
+              const isDisabled = isPredictionLocked || isGameStarted
+
+              return (
+                <div key={game.id}>
+                  {index > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}
+
+                  {isAllLocked ? (
+                    <div className="p-4">
+                      <div className="flex items-center justify-center gap-3">
+                        <div className="flex items-center gap-1.5 flex-1 justify-end">
+                          <span className="text-sm font-semibold text-copa-dark">
+                            {TEAM_ABBR[resolvedTeam1] ?? resolvedTeam1}
+                          </span>
+                          <img
+                            src={`/flags/${FLAG_CODES[resolvedTeam1] ?? FLAG_CODES[game.team1] ?? 'xx'}.png`}
+                            alt={resolvedTeam1}
+                            className="w-8 h-6 object-cover rounded-sm shrink-0"
+                          />
+                        </div>
+                        <span className="text-xl font-extrabold text-copa-dark tabular-nums shrink-0">
+                          {score1 !== '' && score2 !== '' ? `${score1} × ${score2}` : '– × –'}
+                        </span>
+                        <div className="flex items-center gap-1.5 flex-1">
+                          <img
+                            src={`/flags/${FLAG_CODES[resolvedTeam2] ?? FLAG_CODES[game.team2] ?? 'xx'}.png`}
+                            alt={resolvedTeam2}
+                            className="w-8 h-6 object-cover rounded-sm shrink-0"
+                          />
+                          <span className="text-sm font-semibold text-copa-dark">
+                            {TEAM_ABBR[resolvedTeam2] ?? resolvedTeam2}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 text-center mt-2">{dateStr}</p>
+                      {game.score1 !== null && (
+                        <div className="flex items-center justify-center gap-2 mt-1.5">
+                          <span className="text-xs font-medium" style={{ color: '#295A71' }}>
+                            Resultado: {game.score1} × {game.score2}
+                          </span>
+                          <PtsTag points={lockedPredictions.get(game.id)?.points} />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-1 justify-end">
+                          <span className={`text-sm font-semibold ${isGameStarted ? 'text-slate-400' : 'text-copa-dark'}`}>
+                            {TEAM_ABBR[resolvedTeam1] ?? resolvedTeam1}
+                          </span>
+                          <img
+                            src={`/flags/${FLAG_CODES[resolvedTeam1] ?? FLAG_CODES[game.team1] ?? 'xx'}.png`}
+                            alt={resolvedTeam1}
+                            className={`w-8 h-6 object-cover rounded-sm shrink-0 ${isGameStarted ? 'opacity-40' : ''}`}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <input
+                            ref={el => { score1Refs.current[game.id] = el }}
+                            type="text" inputMode="numeric" value={score1}
+                            onChange={e => handleScoreChange(game.id, 0, e.target.value)}
+                            onFocus={e => e.target.select()}
+                            disabled={isDisabled} placeholder="–"
+                            className="score-input w-11 h-11 text-center text-lg font-bold rounded-xl"
+                          />
+                          <span className="text-slate-600 font-bold text-base">×</span>
+                          <input
+                            ref={el => { score2Refs.current[game.id] = el }}
+                            type="text" inputMode="numeric" value={score2}
+                            onChange={e => handleScoreChange(game.id, 1, e.target.value)}
+                            onFocus={e => e.target.select()}
+                            disabled={isDisabled} placeholder="–"
+                            className="score-input w-11 h-11 text-center text-lg font-bold rounded-xl"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-1">
+                          <img
+                            src={`/flags/${FLAG_CODES[resolvedTeam2] ?? FLAG_CODES[game.team2] ?? 'xx'}.png`}
+                            alt={resolvedTeam2}
+                            className={`w-8 h-6 object-cover rounded-sm shrink-0 ${isGameStarted ? 'opacity-40' : ''}`}
+                          />
+                          <span className={`text-sm font-semibold ${isGameStarted ? 'text-slate-400' : 'text-copa-dark'}`}>
+                            {TEAM_ABBR[resolvedTeam2] ?? resolvedTeam2}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-center mt-2">
+                        {isGameStarted
+                          ? <span className="text-copa-red font-semibold">Jogo iniciado — sem pontuação</span>
+                          : <span className="text-slate-600">{dateStr}</span>
+                        }
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {allFilled && !isAllLocked && openGames.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {syncError && (
+                <p className="text-copa-red text-sm text-center font-semibold">{syncError}</p>
+              )}
+              <button
+                className="btn-primary"
+                onClick={handleClickConfirm}
+                disabled={validating}
+              >
+                {validating ? 'Verificando palpites...' : 'Confirmar palpites das oitavas'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Sessão 16 avos de final */}
       {activeSession === 'R32' && (

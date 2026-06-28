@@ -97,6 +97,7 @@ export default function RankingPage() {
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
   const [showCopyModal, setShowCopyModal] = useState(false)
+  const [rankingPhase, setRankingPhase] = useState<'grupos' | 'matamata'>('grupos')
   const summaryRef = useRef<HTMLDivElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -253,9 +254,9 @@ export default function RankingPage() {
   }
 
   const { data: rankingData, isLoading: rankingLoading } = useQuery({
-    queryKey: ['ranking', poolCode],
+    queryKey: ['ranking', poolCode, rankingPhase],
     queryFn: async () => {
-      const { data } = await api.get(`/pools/${poolCode}/ranking`)
+      const { data } = await api.get(`/pools/${poolCode}/ranking`, { params: { phase: rankingPhase } })
       return data as { poolName: string; rankings: RankingEntry[] }
     },
     refetchInterval: 60_000,
@@ -590,6 +591,30 @@ export default function RankingPage() {
                 )}
               </div>
             )}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setRankingPhase('grupos')}
+                className="flex-1 py-1.5 text-sm font-bold rounded-lg transition-all"
+                style={{
+                  backgroundColor: rankingPhase === 'grupos' ? '#FFD100' : 'transparent',
+                  color: '#1a1a1a',
+                  border: `1px solid ${rankingPhase === 'grupos' ? 'transparent' : '#D9CBAD'}`,
+                }}
+              >
+                Fase de Grupos
+              </button>
+              <button
+                onClick={() => setRankingPhase('matamata')}
+                className="flex-1 py-1.5 text-sm font-bold rounded-lg transition-all"
+                style={{
+                  backgroundColor: rankingPhase === 'matamata' ? '#FFD100' : 'transparent',
+                  color: '#1a1a1a',
+                  border: `1px solid ${rankingPhase === 'matamata' ? 'transparent' : '#D9CBAD'}`,
+                }}
+              >
+                Mata-mata
+              </button>
+            </div>
             {rankingLoading ? (
               <div className="text-center text-slate-600 py-12">Carregando ranking...</div>
             ) : (

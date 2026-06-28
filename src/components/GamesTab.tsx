@@ -312,14 +312,19 @@ function R32MatchCard({
   standings,
   top8thirds,
   matchDate,
+  dbTeam1,
+  dbTeam2,
 }: {
   game: R32Game
   standings: Map<string, TeamStat[]>
   top8thirds: Set<string>
   matchDate?: Date
+  dbTeam1?: string
+  dbTeam2?: string
 }) {
-  const t1 = resolveSlot(game.slot1, standings, top8thirds)
-  const t2 = resolveSlot(game.slot2, standings, top8thirds)
+  const isRealTeam = (name?: string) => !!name && !name.startsWith('Venc.') && !/^\d/.test(name)
+  const t1 = isRealTeam(dbTeam1) ? { team: dbTeam1!, label: dbTeam1! } : resolveSlot(game.slot1, standings, top8thirds)
+  const t2 = isRealTeam(dbTeam2) ? { team: dbTeam2!, label: dbTeam2! } : resolveSlot(game.slot2, standings, top8thirds)
 
   return (
     <div style={{
@@ -582,7 +587,15 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
               if (!db) return -1
               return new Date(da).getTime() - new Date(db).getTime()
             }).map(game => (
-              <R32MatchCard key={game.matchId} game={game} standings={standings} top8thirds={top8thirds} matchDate={knockoutGames.get(game.matchId) ? new Date(knockoutGames.get(game.matchId)!.matchDate) : undefined} />
+              <R32MatchCard
+                key={game.matchId}
+                game={game}
+                standings={standings}
+                top8thirds={top8thirds}
+                matchDate={knockoutGames.get(game.matchId) ? new Date(knockoutGames.get(game.matchId)!.matchDate) : undefined}
+                dbTeam1={knockoutGames.get(game.matchId)?.team1}
+                dbTeam2={knockoutGames.get(game.matchId)?.team2}
+              />
             ))}
           </div>
         )}
