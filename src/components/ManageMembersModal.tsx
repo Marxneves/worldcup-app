@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import api from '../services/api'
 
 interface PoolOption {
@@ -39,6 +39,7 @@ export default function ManageMembersModal({ sourcePoolId, onClose }: Props) {
   const [copyResults, setCopyResults] = useState<CopyResult[]>([])
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
   const [removing, setRemoving] = useState(false)
+  const [promotingId, setPromotingId] = useState<string | null>(null)
 
   const { data: membersData, isLoading: membersLoading } = useQuery({
     queryKey: ['admin-pool-members', sourcePoolId],
@@ -60,6 +61,17 @@ export default function ManageMembersModal({ sourcePoolId, onClose }: Props) {
       return next
     })
   }
+
+  const promoteMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      await api.patch('/admin/promote-member', { poolId: sourcePoolId, userId })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-pool-members', sourcePoolId] })
+      queryClient.invalidateQueries({ queryKey: ['ranking'] })
+      setPromotingId(null)
+    },
+  })
 
   async function handleRemove(userId: string) {
     setRemoving(true)
@@ -147,7 +159,27 @@ export default function ManageMembersModal({ sourcePoolId, onClose }: Props) {
                         />
                         <span className="text-sm text-copa-dark font-medium flex-1">{member.name}</span>
                         {member.isShadow && (
-                          <span className="text-xs text-slate-400">oculto</span>
+                          promotingId === member.userId ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-slate-500">Promover?</span>
+                              <button
+                                disabled={promoteMutation.isPending}
+                                onClick={() => promoteMutation.mutate(member.userId)}
+                                className="text-xs bg-copa-teal text-white px-2 py-1 rounded-lg font-semibold disabled:opacity-40"
+                              >
+                                {promoteMutation.isPending ? '...' : 'Sim'}
+                              </button>
+                              <button onClick={() => setPromotingId(null)} className="text-xs text-slate-400 px-1 py-1">Não</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setPromotingId(member.userId)}
+                              className="text-xs font-semibold px-2 py-1 rounded-lg"
+                              style={{ backgroundColor: 'rgba(41,90,113,0.1)', color: '#295A71' }}
+                            >
+                              Promover
+                            </button>
+                          )
                         )}
                         <button
                           onClick={() => setConfirmRemoveId(member.userId)}

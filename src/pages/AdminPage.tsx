@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { Game } from '../types'
+import ManageMembersModal from '../components/ManageMembersModal'
 
 function utcToSaoPauloInput(utcIso: string): string {
   const d = new Date(utcIso)
@@ -35,12 +36,21 @@ export default function AdminPage() {
   const [timeError, setTimeError] = useState('')
   const [togglingStats, setTogglingStats] = useState(false)
   const [syncingOdds, setSyncingOdds] = useState(false)
+  const [managingPoolId, setManagingPoolId] = useState<string | null>(null)
 
   const { data: featureFlags } = useQuery({
     queryKey: ['features'],
     queryFn: async () => {
       const { data } = await api.get('/admin/features')
       return data as { statsEnabled: boolean }
+    },
+  })
+
+  const { data: allPoolsData } = useQuery({
+    queryKey: ['admin-pools'],
+    queryFn: async () => {
+      const { data } = await api.get('/admin/pools')
+      return data as { pools: { id: string; name: string; code: string; memberCount: number }[] }
     },
   })
 
@@ -371,7 +381,35 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+        {/* Gerenciar membros de qualquer bolão */}
+        <div className="card p-5">
+          <h2 className="font-bold text-copa-dark mb-4">Gerenciar membros</h2>
+          <div className="space-y-3">
+            {(allPoolsData?.pools ?? []).map(pool => (
+              <div key={pool.id} className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-copa-dark truncate">{pool.name}</p>
+                  <p className="text-xs text-slate-500">{pool.memberCount} membros · {pool.code}</p>
+                </div>
+                <button
+                  onClick={() => setManagingPoolId(pool.id)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg shrink-0"
+                  style={{ backgroundColor: 'rgba(41,90,113,0.1)', color: '#295A71' }}
+                >
+                  Gerenciar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {managingPoolId && (
+        <ManageMembersModal
+          sourcePoolId={managingPoolId}
+          onClose={() => setManagingPoolId(null)}
+        />
+      )}
     </div>
   )
 }
