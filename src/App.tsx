@@ -32,7 +32,8 @@ function useApiWakeup() {
           await new Promise(r => setTimeout(r, 5000))
           try {
             await api.get('/health', { timeout: 10000 })
-            if (!cancelled) window.location.reload()
+            const isAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
+            if (!cancelled && !isAuthPage) window.location.reload()
             return
           } catch {
             // still sleeping
@@ -55,7 +56,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className={`min-h-full max-w-md mx-auto${isBrazilDay ? ' brazil-day' : ''}`}>
+      <div className={`min-h-full max-w-md mx-auto${isBrazilDay ? ' brazil-day bg-copa-cream' : ''}`}>
         {isBrazilDay && <BrazilDayOverlay />}
 
         <Routes>

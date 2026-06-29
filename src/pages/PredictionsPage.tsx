@@ -374,6 +374,14 @@ export default function PredictionsPage() {
   )
   const showR16Session = r16Games.length > 0 && r32Games.length === 16 && r32Games.every(g => g.score1 !== null)
 
+  const autoSessionRef = useRef(false)
+  useEffect(() => {
+    if (autoSessionRef.current || !games?.length) return
+    autoSessionRef.current = true
+    if (showR16Session) setActiveSession('R16')
+    else if (showR32Session) setActiveSession('R32')
+  }, [games, showR32Session, showR16Session])
+
   const r32GameIds = useMemo(() => new Set(r32Games.map(g => g.id)), [r32Games])
   const r16GameIds = useMemo(() => new Set(r16Games.map(g => g.id)), [r16Games])
 

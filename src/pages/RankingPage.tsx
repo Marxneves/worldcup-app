@@ -97,7 +97,7 @@ export default function RankingPage() {
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
   const [showCopyModal, setShowCopyModal] = useState(false)
-  const [rankingPhase, setRankingPhase] = useState<'grupos' | 'matamata'>('grupos')
+  const [rankingPhase, setRankingPhase] = useState<'grupos' | 'matamata'>('matamata')
   const [summaryPhase, setSummaryPhase] = useState<'matamata' | 'grupos' | 'total'>('matamata')
   const summaryRef = useRef<HTMLDivElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
@@ -274,9 +274,20 @@ export default function RankingPage() {
       if (!games) return false
       const now = new Date()
       const hasLiveGame = games.some(g => g.score1 === null && new Date(g.matchDate) <= now)
-      return hasLiveGame ? 60_000 : false
+      const hasRecentKnockout = games.some(g => {
+        if (g.number < 73) return false
+        const date = new Date(g.matchDate)
+        return date <= now && now.getTime() - date.getTime() < 3 * 60 * 60 * 1000
+      })
+      return (hasLiveGame || hasRecentKnockout) ? 60_000 : false
     },
   })
+
+  useEffect(() => {
+    if (activeTab === 'games') {
+      queryClient.invalidateQueries({ queryKey: ['games'] })
+    }
+  }, [activeTab, queryClient])
 
   const { data: poolData } = useQuery({
     queryKey: ['pool', poolCode],

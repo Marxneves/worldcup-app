@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Game, Prediction } from '../types'
 import FlagImage, { TEAM_ABBR } from './FlagImage'
 
@@ -307,6 +307,17 @@ function formatKnockoutDate(date: Date): string {
   return `${day} · ${hour}`
 }
 
+function ScoreBadge({ score1, score2 }: { score1: number | null | undefined; score2: number | null | undefined }) {
+  if (score1 == null || score2 == null) {
+    return <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+  }
+  return (
+    <span style={{ fontSize: 13, fontWeight: 800, color: '#295A71', fontVariantNumeric: 'tabular-nums', paddingLeft: 4, paddingRight: 4, whiteSpace: 'nowrap' }}>
+      {score1} × {score2}
+    </span>
+  )
+}
+
 function R32MatchCard({
   game,
   standings,
@@ -314,6 +325,8 @@ function R32MatchCard({
   matchDate,
   dbTeam1,
   dbTeam2,
+  score1,
+  score2,
 }: {
   game: R32Game
   standings: Map<string, TeamStat[]>
@@ -321,6 +334,8 @@ function R32MatchCard({
   matchDate?: Date
   dbTeam1?: string
   dbTeam2?: string
+  score1?: number | null
+  score2?: number | null
 }) {
   const isRealTeam = (name?: string) => !!name && !name.startsWith('Venc.') && !/^\d/.test(name)
   const t1 = isRealTeam(dbTeam1) ? { team: dbTeam1!, label: dbTeam1! } : resolveSlot(game.slot1, standings, top8thirds)
@@ -347,7 +362,7 @@ function R32MatchCard({
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
           <TeamCell team={t1.team} label={t1.label} />
         </div>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+        <ScoreBadge score1={score1} score2={score2} />
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
           <TeamCell team={t2.team} label={t2.label} />
         </div>
@@ -356,11 +371,13 @@ function R32MatchCard({
   )
 }
 
-function R16MatchCard({ game, team1, team2, matchDate }: {
+function R16MatchCard({ game, team1, team2, matchDate, score1, score2 }: {
   game: R16Game
   team1?: string
   team2?: string
   matchDate?: Date
+  score1?: number | null
+  score2?: number | null
 }) {
   const t1Real = team1 && !team1.startsWith('Venc.')
   const t2Real = team2 && !team2.startsWith('Venc.')
@@ -380,7 +397,7 @@ function R16MatchCard({ game, team1, team2, matchDate }: {
             : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{game.r32Id1}</span>
           }
         </div>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+        <ScoreBadge score1={score1} score2={score2} />
         <div style={{ flex: 1 }}>
           {t2Real
             ? <TeamCell team={team2!} label={team2!} />
@@ -430,13 +447,16 @@ interface GamesTabProps {
 }
 
 export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResult }: GamesTabProps) {
-  const [r32Expanded, setR32Expanded] = useState(true)
+  const [groupsExpanded, setGroupsExpanded] = useState(false)
+  const [thirdsExpanded, setThirdsExpanded] = useState(false)
+  const [r32Expanded, setR32Expanded] = useState(false)
   const [r16Expanded, setR16Expanded] = useState(false)
   const [qfExpanded, setQfExpanded] = useState(false)
   const [sfExpanded, setSfExpanded] = useState(false)
   const [tpExpanded, setTpExpanded] = useState(false)
   const [finExpanded, setFinExpanded] = useState(false)
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+  const autoExpandedRef = useRef(false)
   const [adminExpanded, setAdminExpanded] = useState(false)
   const [adminEditing, setAdminEditing] = useState<number | null>(null)
   const [editScore1, setEditScore1] = useState('')
@@ -460,6 +480,34 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
     [thirdPlaceRanking]
   )
 
+  const activePhase = useMemo(() => {
+    const r32 = gamesData.filter(g => g.number >= 73 && g.number <= 88)
+    const r16 = gamesData.filter(g => g.number >= 89 && g.number <= 96)
+    const qf  = gamesData.filter(g => g.number >= 97 && g.number <= 100)
+    const sf  = gamesData.filter(g => g.number >= 101 && g.number <= 102)
+    const tp  = gamesData.find(g => g.number === 103)
+    if (!r32.length || r32.some(g => g.score1 === null)) return 'R32'
+    if (!r16.length || r16.some(g => g.score1 === null)) return 'R16'
+    if (!qf.length  || qf.some(g => g.score1 === null))  return 'QF'
+    if (!sf.length  || sf.some(g => g.score1 === null))  return 'SF'
+    if (!tp || tp.score1 === null) return 'TP'
+    return 'FIN'
+  }, [gamesData])
+
+  useEffect(() => {
+    if (autoExpandedRef.current || gamesData.length === 0) return
+    autoExpandedRef.current = true
+    const hasKnockout = gamesData.some(g => g.number >= 73)
+    setGroupsExpanded(!hasKnockout)
+    setThirdsExpanded(!hasKnockout)
+    setR32Expanded(activePhase === 'R32')
+    setR16Expanded(activePhase === 'R16')
+    setQfExpanded(activePhase === 'QF')
+    setSfExpanded(activePhase === 'SF')
+    setTpExpanded(activePhase === 'TP')
+    setFinExpanded(activePhase === 'FIN')
+  }, [gamesData, activePhase])
+
   const finishedGames = gamesData.filter(g => g.score1 !== null)
   const upcomingGames = gamesData.filter(g => g.score1 === null)
 
@@ -479,32 +527,35 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
 
       {/* ── Classificação por grupos ── */}
       <div style={{ marginBottom: 4 }}>
-        <div style={{ padding: '10px 0 8px' }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#295A71', textTransform: 'uppercase', letterSpacing: 1 }}>
-            Classificação por grupo
-          </span>
-        </div>
-
-        {/* Legenda */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-          {[
-            { color: '#00FEA8', label: 'Classificado (16 avos)' },
-            { color: '#FFD100', label: 'Pode classificar (3º)' },
-            { color: '#e63946', label: 'Eliminado' },
-          ].map(({ color, label }) => (
-            <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#64748b' }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color, flexShrink: 0 }} />
-              {label}
-            </span>
-          ))}
-        </div>
-
-        {/* Grid de grupos — 2 colunas */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          {GROUPS.map(group => (
-            <GroupTable key={group} group={group} teams={standings.get(group) ?? []} onClick={() => setSelectedGroup(group)} />
-          ))}
-        </div>
+        <SectionHeader
+          label="Classificação por grupo"
+          count={12}
+          expanded={groupsExpanded}
+          onToggle={() => setGroupsExpanded(v => !v)}
+        />
+        {groupsExpanded && (
+          <>
+            {/* Legenda */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+              {[
+                { color: '#00FEA8', label: 'Classificado (16 avos)' },
+                { color: '#FFD100', label: 'Pode classificar (3º)' },
+                { color: '#e63946', label: 'Eliminado' },
+              ].map(({ color, label }) => (
+                <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#64748b' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color, flexShrink: 0 }} />
+                  {label}
+                </span>
+              ))}
+            </div>
+            {/* Grid de grupos — 2 colunas */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+              {GROUPS.map(group => (
+                <GroupTable key={group} group={group} teams={standings.get(group) ?? []} onClick={() => setSelectedGroup(group)} />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {selectedGroup && (
@@ -512,16 +563,13 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
       )}
 
       {/* ── Ranking dos 3ºs colocados ── */}
-      <div style={{ marginTop: 16, marginBottom: 4 }}>
-        <div style={{ padding: '6px 0 8px' }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#295A71', textTransform: 'uppercase', letterSpacing: 1 }}>
-            Melhores 3ºs colocados
-          </span>
-          <span style={{ marginLeft: 6, fontSize: 10, color: '#64748b', fontWeight: 600 }}>
-            — top 8 se classificam
-          </span>
-        </div>
-        <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden' }}>
+      <div style={{ borderTop: '1px solid #D9CBAD', marginTop: 0 }}>
+        <SectionHeader
+          label="Melhores 3ºs colocados"
+          expanded={thirdsExpanded}
+          onToggle={() => setThirdsExpanded(v => !v)}
+        />
+        {thirdsExpanded && <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, overflow: 'hidden', marginBottom: 8 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #D9CBAD', backgroundColor: '#F5EDD0' }}>
@@ -567,11 +615,11 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
               })}
             </tbody>
           </table>
-        </div>
+        </div>}
       </div>
 
       {/* ── 16 Avos de Final ── */}
-      <div style={{ marginTop: 16, borderTop: '1px solid #D9CBAD', paddingTop: 0 }}>
+      <div style={{ borderTop: '1px solid #D9CBAD', paddingTop: 0 }}>
         <SectionHeader
           label="16 Avos de Final"
           count={16}
@@ -595,6 +643,8 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                 matchDate={knockoutGames.get(game.matchId) ? new Date(knockoutGames.get(game.matchId)!.matchDate) : undefined}
                 dbTeam1={knockoutGames.get(game.matchId)?.team1}
                 dbTeam2={knockoutGames.get(game.matchId)?.team2}
+                score1={knockoutGames.get(game.matchId)?.score1}
+                score2={knockoutGames.get(game.matchId)?.score2}
               />
             ))}
           </div>
@@ -626,6 +676,8 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                   team1={dbGame?.team1}
                   team2={dbGame?.team2}
                   matchDate={dbGame ? new Date(dbGame.matchDate) : undefined}
+                  score1={dbGame?.score1}
+                  score2={dbGame?.score2}
                 />
               )
             })}
@@ -651,7 +703,7 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
                       {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{q.r16Id1}</span>}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+                    <ScoreBadge score1={dbGame?.score1} score2={dbGame?.score2} />
                     <div style={{ flex: 1 }}>
                       {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{q.r16Id2}</span>}
                     </div>
@@ -681,7 +733,7 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
                       {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{s.q1}</span>}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+                    <ScoreBadge score1={dbGame?.score1} score2={dbGame?.score2} />
                     <div style={{ flex: 1 }}>
                       {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{s.q2}</span>}
                     </div>
@@ -711,7 +763,7 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
                       {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Perd. J101</span>}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+                    <ScoreBadge score1={dbGame?.score1} score2={dbGame?.score2} />
                     <div style={{ flex: 1 }}>
                       {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Perd. J102</span>}
                     </div>
@@ -741,7 +793,10 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
                       {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 12, color: '#1a1a1a', fontWeight: 700 }}>Venc. J101</span>}
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#FFD100', paddingLeft: 6, paddingRight: 6 }}>×</span>
+                    {dbGame?.score1 != null
+                      ? <span style={{ fontSize: 14, fontWeight: 800, color: '#B8960A', fontVariantNumeric: 'tabular-nums', paddingLeft: 4, paddingRight: 4, whiteSpace: 'nowrap' }}>{dbGame.score1} × {dbGame.score2}</span>
+                      : <span style={{ fontSize: 13, fontWeight: 800, color: '#FFD100', paddingLeft: 6, paddingRight: 6 }}>×</span>
+                    }
                     <div style={{ flex: 1 }}>
                       {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 12, color: '#1a1a1a', fontWeight: 700 }}>Venc. J102</span>}
                     </div>
