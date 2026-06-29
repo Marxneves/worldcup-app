@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import domtoimage from 'dom-to-image-more'
 import api from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -324,7 +324,28 @@ export default function RankingPage() {
       })
       return data.predictions as Prediction[]
     },
-    enabled: !!selectedEntry && !!poolData?.id,
+    enabled: !!selectedEntry && !!poolData?.id && !user?.isAdmin,
+  })
+
+  const { data: adminPredictions, refetch: refetchAdminPredictions } = useQuery({
+    queryKey: ['admin-member-predictions', selectedEntry?.userId, poolData?.id],
+    queryFn: async () => {
+      const { data } = await api.get(`/admin/member-predictions/${selectedEntry!.userId}`, {
+        params: { poolId: poolData!.id },
+      })
+      return data.predictions as Prediction[]
+    },
+    enabled: !!selectedEntry && !!poolData?.id && !!user?.isAdmin,
+  })
+
+  const validateMutation = useMutation({
+    mutationFn: async (predictionId: string) => {
+      await api.patch(`/admin/validate-prediction/${predictionId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ranking', poolCode, rankingPhase] })
+      refetchAdminPredictions()
+    },
   })
 
   const myPredictions = new Map(predictionsData?.map(p => [p.gameId, p]) ?? [])
@@ -638,7 +659,7 @@ export default function RankingPage() {
                   return (
                     <div
                       key={entry.userId}
-                      className={canViewPredictions ? 'cursor-pointer active:opacity-70' : 'cursor-default'}
+                      className={(canViewPredictions || user?.isAdmin) ? 'cursor-pointer active:opacity-70' : 'cursor-default'}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -652,7 +673,7 @@ export default function RankingPage() {
                           ? '2px solid rgb(var(--copa-border))'
                           : '1px solid rgb(var(--copa-border) / 0.6)',
                       }}
-                      onClick={() => { if (canViewPredictions) setSelectedEntry(entry) }}
+                      onClick={() => { if (canViewPredictions || user?.isAdmin) setSelectedEntry(entry) }}
                     >
                       {isTop3 && isFirstInTieGroup ? (
                         <div style={{
@@ -1329,32 +1350,34 @@ export default function RankingPage() {
                 </div>
               </div>
 
-              {viewLoading ? (
-                <div className="text-center text-slate-600 py-8">Carregando palpites...</div>
-              ) : viewPredictions ? (
-                <div className="space-y-4">
-                  {(() => {
-                    const byGroup: Record<string, Prediction[]> = {}
-                    for (const pred of viewPredictions) {
-                      const g = pred.game.group
-                      if (!byGroup[g]) byGroup[g] = []
-                      byGroup[g].push(pred)
-                    }
-                    return Object.keys(byGroup).sort().map(group => (
-                      <div key={group}>
-                        <p className="text-xs font-bold uppercase tracking-wider text-copa-gold mb-2">
-                          Grupo {group}
+              {(() => {
+                const activePredictions = user?.isAdmin
+                  ? (adminPredictions ?? []).filter(p => p.isLocked)
+                  : viewPredictions
+                const isActiveLoading = user?.isAdmin ? false : viewLoading
+
+                const pendingPredictions = user?.isAdmin
+                  ? (adminPredictions ?? []).filter(p => !p.isLocked && new Date(p.game.matchDate) <= new Date())
+                  : []
+
+                if (isActiveLoading) {
+                  return <div className="text-center text-slate-600 py-8">Carregando palpites...</div>
+                }
+
+                return (
+                  <div className="space-y-4">
+                    {pendingPredictions.length > 0 && (
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#e63946' }}>
+                          Pendentes de validacao
                         </p>
                         <div className="card overflow-hidden" style={{ borderRadius: 0 }}>
-                          {byGroup[group].map((pred, idx) => {
-                            const pts = pred.game.score1 !== null ? pred.points : null
-                            const ptsBg = pts === 3 ? 'rgba(0,254,168,0.15)' : pts === 1 ? 'rgba(255,209,0,0.15)' : 'rgba(230,57,70,0.1)'
-                            const ptsColor = pts === 3 ? '#295A71' : pts === 1 ? '#FFD100' : '#e63946'
-                            return (
-                              <div key={pred.id}>
-                                {idx > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}
-                                <div className="p-3 relative">
-                                  <div className="flex items-center gap-2 text-sm">
+                          {pendingPredictions.map((pred, idx) => (
+                            <div key={pred.id}>
+                              {idx > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}
+                              <div className="p-3 flex items-center gap-2">
+                                <div className="flex-1 text-sm">
+                                  <div className="flex items-center gap-2">
                                     <span className="font-semibold text-copa-dark flex-1 flex items-center justify-end gap-1.5">
                                       <FlagImage team={pred.game.team1} size={16} />
                                       {TEAM_ABBR[pred.game.team1] ?? pred.game.team1}
@@ -1367,30 +1390,84 @@ export default function RankingPage() {
                                       <FlagImage team={pred.game.team2} size={16} />
                                     </span>
                                   </div>
-                                  {pred.game.score1 !== null && (
-                                    <div className="flex items-center gap-2 text-xs mt-0.5">
-                                      <div className="flex-1 text-right font-semibold" style={{ color: '#295A71' }}>Resultado</div>
-                                      <div className="shrink-0 tabular-nums font-semibold text-center" style={{ minWidth: 56, color: '#295A71' }}>
-                                        {pred.game.score1} × {pred.game.score2}
-                                      </div>
-                                      <div className="flex-1" />
-                                    </div>
-                                  )}
-                                  {pts !== null && pts !== undefined && (
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: ptsBg, color: ptsColor }}>
-                                      +{pts}pts
-                                    </span>
-                                  )}
+                                  <p className="text-xs text-slate-500 mt-0.5 text-center">
+                                    Jogo {pred.game.number}
+                                  </p>
                                 </div>
+                                <button
+                                  onClick={() => validateMutation.mutate(pred.id)}
+                                  disabled={validateMutation.isPending}
+                                  className="text-xs font-bold px-3 py-1.5 rounded-lg shrink-0"
+                                  style={{ backgroundColor: '#00FEA8', color: '#1a1a1a', opacity: validateMutation.isPending ? 0.5 : 1 }}
+                                >
+                                  Validar
+                                </button>
                               </div>
-                            )
-                          })}
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ))
-                  })()}
-                </div>
-              ) : null}
+                    )}
+
+                    {activePredictions && activePredictions.length > 0 && (() => {
+                      const byGroup: Record<string, Prediction[]> = {}
+                      for (const pred of activePredictions) {
+                        const g = pred.game.group
+                        if (!byGroup[g]) byGroup[g] = []
+                        byGroup[g].push(pred)
+                      }
+                      return Object.keys(byGroup).sort().map(group => (
+                        <div key={group}>
+                          <p className="text-xs font-bold uppercase tracking-wider text-copa-gold mb-2">
+                            Grupo {group}
+                          </p>
+                          <div className="card overflow-hidden" style={{ borderRadius: 0 }}>
+                            {byGroup[group].map((pred, idx) => {
+                              const pts = pred.game.score1 !== null ? pred.points : null
+                              const ptsBg = pts === 3 ? 'rgba(0,254,168,0.15)' : pts === 1 ? 'rgba(255,209,0,0.15)' : 'rgba(230,57,70,0.1)'
+                              const ptsColor = pts === 3 ? '#295A71' : pts === 1 ? '#FFD100' : '#e63946'
+                              return (
+                                <div key={pred.id}>
+                                  {idx > 0 && <div style={{ height: 1, backgroundColor: '#D9CBAD' }} />}
+                                  <div className="p-3 relative">
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <span className="font-semibold text-copa-dark flex-1 flex items-center justify-end gap-1.5">
+                                        <FlagImage team={pred.game.team1} size={16} />
+                                        {TEAM_ABBR[pred.game.team1] ?? pred.game.team1}
+                                      </span>
+                                      <div className="shrink-0 text-center tabular-nums font-extrabold text-copa-dark" style={{ minWidth: 56 }}>
+                                        {pred.score1} × {pred.score2}
+                                      </div>
+                                      <span className="font-semibold text-copa-dark flex-1 flex items-center gap-1.5">
+                                        {TEAM_ABBR[pred.game.team2] ?? pred.game.team2}
+                                        <FlagImage team={pred.game.team2} size={16} />
+                                      </span>
+                                    </div>
+                                    {pred.game.score1 !== null && (
+                                      <div className="flex items-center gap-2 text-xs mt-0.5">
+                                        <div className="flex-1 text-right font-semibold" style={{ color: '#295A71' }}>Resultado</div>
+                                        <div className="shrink-0 tabular-nums font-semibold text-center" style={{ minWidth: 56, color: '#295A71' }}>
+                                          {pred.game.score1} × {pred.game.score2}
+                                        </div>
+                                        <div className="flex-1" />
+                                      </div>
+                                    )}
+                                    {pts !== null && pts !== undefined && (
+                                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: ptsBg, color: ptsColor }}>
+                                        +{pts}pts
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                )
+              })()}
             </motion.div>
           </motion.div>
         )}
