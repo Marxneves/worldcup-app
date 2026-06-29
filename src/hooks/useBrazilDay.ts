@@ -14,7 +14,7 @@ export function useBrazilDay(): boolean {
     queryKey: ['games'],
     queryFn: async () => {
       const { data } = await api.get('/games')
-      return data as Game[]
+      return (data.games ?? data) as Game[]
     },
     staleTime: 5 * 60 * 1000,
   })
