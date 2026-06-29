@@ -1351,13 +1351,17 @@ export default function RankingPage() {
               </div>
 
               {(() => {
-                const activePredictions = user?.isAdmin
+                const phaseFilter = (p: Prediction) =>
+                  rankingPhase === 'matamata' ? p.game.number >= 73 : p.game.number <= 72
+
+                const activePredictions = (user?.isAdmin
                   ? (adminPredictions ?? []).filter(p => p.isLocked)
-                  : viewPredictions
+                  : (viewPredictions ?? [])
+                ).filter(phaseFilter)
                 const isActiveLoading = user?.isAdmin ? false : viewLoading
 
                 const pendingPredictions = user?.isAdmin
-                  ? (adminPredictions ?? []).filter(p => !p.isLocked && new Date(p.game.matchDate) <= new Date())
+                  ? (adminPredictions ?? []).filter(p => !p.isLocked && new Date(p.game.matchDate) <= new Date() && phaseFilter(p))
                   : []
 
                 if (isActiveLoading) {
@@ -1410,6 +1414,10 @@ export default function RankingPage() {
                     )}
 
                     {activePredictions && activePredictions.length > 0 && (() => {
+                      const GROUP_LABELS: Record<string, string> = {
+                        R32: '16 avos de final', R16: 'Oitavas de final',
+                        QF: 'Quartas de final', SF: 'Semifinais', F: 'Final',
+                      }
                       const byGroup: Record<string, Prediction[]> = {}
                       for (const pred of activePredictions) {
                         const g = pred.game.group
@@ -1419,7 +1427,7 @@ export default function RankingPage() {
                       return Object.keys(byGroup).sort().map(group => (
                         <div key={group}>
                           <p className="text-xs font-bold uppercase tracking-wider text-copa-gold mb-2">
-                            Grupo {group}
+                            {GROUP_LABELS[group] ?? `Grupo ${group}`}
                           </p>
                           <div className="card overflow-hidden" style={{ borderRadius: 0 }}>
                             {byGroup[group].map((pred, idx) => {
