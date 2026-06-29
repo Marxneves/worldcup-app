@@ -98,6 +98,7 @@ export default function RankingPage() {
   const [syncDone, setSyncDone] = useState(false)
   const [showCopyModal, setShowCopyModal] = useState(false)
   const [rankingPhase, setRankingPhase] = useState<'grupos' | 'matamata'>('grupos')
+  const [summaryPhase, setSummaryPhase] = useState<'matamata' | 'grupos' | 'total'>('matamata')
   const summaryRef = useRef<HTMLDivElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -106,9 +107,9 @@ export default function RankingPage() {
   const queryClient = useQueryClient()
 
   const { data: summaryData, isLoading: summaryLoading } = useQuery({
-    queryKey: ['daily-summary', poolCode, summaryDate],
+    queryKey: ['daily-summary', poolCode, summaryDate, summaryPhase],
     queryFn: async () => {
-      const { data } = await api.get(`/pools/${poolCode}/daily-summary`, { params: { date: summaryDate } })
+      const { data } = await api.get(`/pools/${poolCode}/daily-summary`, { params: { date: summaryDate, phase: summaryPhase } })
       return data as DailySummary
     },
     enabled: activeTab === 'summary' && !!poolCode,
@@ -213,10 +214,10 @@ export default function RankingPage() {
   }, [activeTab, poolCode, summaryDate, summaryData, fetchLiveScores])
 
   const { data: gameRankingData, isLoading: gameRankingLoading } = useQuery({
-    queryKey: ['daily-summary', poolCode, summaryDate, selectedGameNumber],
+    queryKey: ['daily-summary', poolCode, summaryDate, selectedGameNumber, summaryPhase],
     queryFn: async () => {
       const { data } = await api.get(`/pools/${poolCode}/daily-summary`, {
-        params: { date: summaryDate, upToGame: selectedGameNumber },
+        params: { date: summaryDate, upToGame: selectedGameNumber, phase: summaryPhase },
       })
       return data as DailySummary
     },
@@ -761,6 +762,22 @@ export default function RankingPage() {
 
         {activeTab === 'summary' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="flex gap-2 mb-3">
+              {(['matamata', 'grupos', 'total'] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setSummaryPhase(p)}
+                  className="flex-1 py-1.5 text-sm font-bold rounded-lg transition-all"
+                  style={{
+                    backgroundColor: summaryPhase === p ? '#FFD100' : 'transparent',
+                    color: '#1a1a1a',
+                    border: `1px solid ${summaryPhase === p ? 'transparent' : '#D9CBAD'}`,
+                  }}
+                >
+                  {p === 'matamata' ? 'Mata-mata' : p === 'grupos' ? 'Grupos' : 'Total'}
+                </button>
+              ))}
+            </div>
             <div className="flex items-center justify-between mb-3">
               <div className="relative">
                 <input
