@@ -21,7 +21,7 @@ function saoPauloInputToUtc(brtValue: string): string {
 }
 
 export default function AdminPage() {
-  const { user } = useAuth()
+  const { user, simulateUser, toggleSimulation } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -381,6 +381,29 @@ export default function AdminPage() {
       {/* ── Aba Sistema ── */}
       {activeTab === 'sistema' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Simulação */}
+          <div className="card p-5">
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#295A71', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+              Simulação de usuário
+            </p>
+            <p className="text-slate-600 text-xs mb-4">
+              Visualize o app como um participante normal. Funcionalidades admin ficam ocultas.
+            </p>
+            <button
+              onClick={toggleSimulation}
+              style={{
+                width: '100%', padding: '12px 16px',
+                borderRadius: 12, border: 'none', cursor: 'pointer',
+                backgroundColor: simulateUser ? '#295A71' : 'rgba(41,90,113,0.08)',
+                color: simulateUser ? '#F5EDD0' : '#295A71',
+                fontSize: 13, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              {simulateUser ? 'Desativar simulação' : 'Ativar simulação de usuário'}
+            </button>
+          </div>
 
           {/* Feature flags */}
           <div className="card p-5">

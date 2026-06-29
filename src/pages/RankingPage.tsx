@@ -82,7 +82,7 @@ function applyStandardRanking<T extends { totalPoints: number; exactScores: numb
 export default function RankingPage() {
   const { poolCode } = useParams<{ poolCode: string }>()
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user, isAdmin, logout } = useAuth()
   const [activeTab, setActiveTab] = useState<'ranking' | 'games' | 'summary'>('ranking')
   const [showStatsModal, setShowStatsModal] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null)
@@ -326,7 +326,7 @@ export default function RankingPage() {
     enabled: showStatsModal && !!poolCode,
   })
 
-  const showStatsTab = user?.isAdmin || (featureFlags?.statsEnabled ?? false)
+  const showStatsTab = isAdmin || (featureFlags?.statsEnabled ?? false)
 
   const { data: viewPredictions, isLoading: viewLoading } = useQuery({
     queryKey: ['predictions-user', selectedEntry?.userId, poolData?.id],
@@ -336,7 +336,7 @@ export default function RankingPage() {
       })
       return data.predictions as Prediction[]
     },
-    enabled: !!selectedEntry && !!poolData?.id && !user?.isAdmin,
+    enabled: !!selectedEntry && !!poolData?.id && !isAdmin,
   })
 
   const { data: adminPredictions, refetch: refetchAdminPredictions } = useQuery({
@@ -347,7 +347,7 @@ export default function RankingPage() {
       })
       return data.predictions as Prediction[]
     },
-    enabled: !!selectedEntry && !!poolData?.id && !!user?.isAdmin,
+    enabled: !!selectedEntry && !!poolData?.id && !!isAdmin,
   })
 
   const validateMutation = useMutation({
@@ -609,7 +609,7 @@ export default function RankingPage() {
                 </div>
               </div>
             )}
-            {(user?.isAdmin || poolData) && (
+            {(isAdmin || poolData) && (
               <div className="mb-3 flex justify-end items-center gap-2">
                 {showStatsTab && (
                   <button
@@ -624,7 +624,7 @@ export default function RankingPage() {
                     Projeção
                   </button>
                 )}
-                {user?.isAdmin && poolData && (
+                {isAdmin && poolData && (
                   <button
                     onClick={() => setShowCopyModal(true)}
                     className="text-xs bg-copa-teal/10 text-copa-teal border border-copa-teal/30 px-3 py-1.5 rounded-full font-semibold"
@@ -663,7 +663,7 @@ export default function RankingPage() {
             ) : (
               <div className="card overflow-hidden" style={{ borderRadius: 16 }}>
                 {rankingData?.rankings.map((entry, index) => {
-                  if (entry.isHidden && !user?.isAdmin) return null
+                  if (entry.isHidden && !isAdmin) return null
 
                   const { rankings } = rankingData
                   const isFirstInTieGroup = index === 0 || rankings[index - 1].position !== entry.position
@@ -683,7 +683,7 @@ export default function RankingPage() {
                   return (
                     <div
                       key={entry.userId}
-                      className={(canViewPredictions || user?.isAdmin) ? 'cursor-pointer active:opacity-70' : 'cursor-default'}
+                      className={(canViewPredictions || isAdmin) ? 'cursor-pointer active:opacity-70' : 'cursor-default'}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -698,7 +698,7 @@ export default function RankingPage() {
                           : '1px solid rgb(var(--copa-border) / 0.6)',
                         opacity: entry.isHidden ? 0.45 : 1,
                       }}
-                      onClick={() => { if (canViewPredictions || user?.isAdmin) setSelectedEntry(entry) }}
+                      onClick={() => { if (canViewPredictions || isAdmin) setSelectedEntry(entry) }}
                     >
                       {isTop3 && isFirstInTieGroup ? (
                         <div style={{
@@ -732,7 +732,7 @@ export default function RankingPage() {
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                             {entry.name}{isMe ? ' (você)' : ''}
                           </span>
-                          {entry.isHidden && user?.isAdmin && (
+                          {entry.isHidden && isAdmin && (
                             <span className="shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(230,57,70,0.15)', color: '#e63946' }}>
                               oculto
                             </span>
@@ -865,7 +865,7 @@ export default function RankingPage() {
 
             {isSummaryLoading && <LoadingSpinner />}
 
-            {user?.isAdmin && liveSyncError && (
+            {isAdmin && liveSyncError && (
               <div className="mb-3 p-3 rounded-lg border border-red-400 bg-red-50 text-red-700 text-xs font-mono break-all">
                 <span className="font-bold">[Admin] Erro no sync ao vivo:</span> {liveSyncError}
               </div>
@@ -889,7 +889,7 @@ export default function RankingPage() {
                     const simScore1 = simScore?.score1 ?? ''
                     const simScore2 = simScore?.score2 ?? ''
                     const hasSimScore = simulatorMode && !hasOfficialResult && !hasLiveScore && simScore1 !== '' && simScore2 !== ''
-                    const showAdminSync = user?.isAdmin && !hasOfficialResult && new Date(game.matchDate) <= new Date()
+                    const showAdminSync = isAdmin && !hasOfficialResult && new Date(game.matchDate) <= new Date()
 
                     const getEffectivePoints = (pred: typeof game.predictions[0]): number | null => {
                       if (hasOfficialResult) return pred.points ?? 0
@@ -1206,7 +1206,7 @@ export default function RankingPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <GamesTab
               gamesData={gamesData ?? []}
-              isAdmin={user?.isAdmin}
+              isAdmin={isAdmin}
               myPredictions={myPredictions}
               onSaveResult={handleSaveResult}
             />
@@ -1395,7 +1395,7 @@ export default function RankingPage() {
                     <p className="text-2xl font-extrabold text-copa-dark">{selectedEntry.totalPoints}</p>
                     <p className="text-xs text-slate-600">pts</p>
                   </div>
-                  {user?.isAdmin && poolData && (
+                  {isAdmin && poolData && (
                     <button
                       onClick={() => toggleVisibilityMutation.mutate({ poolId: poolData.id, userId: selectedEntry.userId })}
                       disabled={toggleVisibilityMutation.isPending}
@@ -1417,13 +1417,13 @@ export default function RankingPage() {
                 const phaseFilter = (p: Prediction) =>
                   rankingPhase === 'matamata' ? p.game.number >= 73 : p.game.number <= 72
 
-                const activePredictions = (user?.isAdmin
+                const activePredictions = (isAdmin
                   ? (adminPredictions ?? []).filter(p => p.isLocked)
                   : (viewPredictions ?? [])
                 ).filter(phaseFilter)
-                const isActiveLoading = user?.isAdmin ? false : viewLoading
+                const isActiveLoading = isAdmin ? false : viewLoading
 
-                const pendingPredictions = user?.isAdmin
+                const pendingPredictions = isAdmin
                   ? (adminPredictions ?? []).filter(p => !p.isLocked && new Date(p.game.matchDate) <= new Date() && phaseFilter(p))
                   : []
 

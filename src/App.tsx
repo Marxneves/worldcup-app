@@ -53,6 +53,7 @@ function useApiWakeup() {
 export default function App() {
   const sleeping = useApiWakeup()
   const isBrazilDay = useBrazilDay()
+  const { simulateUser, toggleSimulation } = useAuth()
 
   return (
     <BrowserRouter>
@@ -70,6 +71,32 @@ export default function App() {
         </Routes>
 
         <AnimatePresence>
+          {simulateUser && (
+            <motion.div
+              className="fixed bottom-5 left-0 right-0 z-50 flex justify-center px-5"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <button
+                onClick={toggleSimulation}
+                className="max-w-md w-full rounded-2xl px-4 py-3 flex items-center justify-between gap-3 shadow-lg"
+                style={{ backgroundColor: '#295A71', color: '#F5EDD0', border: 'none', cursor: 'pointer' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>👁</span>
+                  <div style={{ textAlign: 'left' }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.2 }}>Modo simulação ativo</p>
+                    <p style={{ fontSize: 11, opacity: 0.75, marginTop: 1 }}>Visualizando como usuário normal</p>
+                  </div>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, backgroundColor: 'rgba(255,255,255,0.15)', padding: '4px 10px', borderRadius: 8 }}>
+                  Desativar
+                </span>
+              </button>
+            </motion.div>
+          )}
           {sleeping && (
             <motion.div
               className="fixed bottom-5 left-0 right-0 z-50 flex justify-center px-5"
