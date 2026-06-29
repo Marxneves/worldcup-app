@@ -42,6 +42,7 @@ export interface RankingEntry {
   exactScores: number
   correctResults: number
   lockedCount: number
+  isHidden: boolean
 }
 
 export interface DailySummaryPrediction {

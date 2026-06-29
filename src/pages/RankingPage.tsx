@@ -348,6 +348,16 @@ export default function RankingPage() {
     },
   })
 
+  const toggleVisibilityMutation = useMutation({
+    mutationFn: async ({ poolId, userId }: { poolId: string; userId: string }) => {
+      await api.patch('/admin/toggle-member-visibility', { poolId, userId })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ranking', poolCode, rankingPhase] })
+      setSelectedEntry(prev => prev ? { ...prev, isHidden: !prev.isHidden } : null)
+    },
+  })
+
   const myPredictions = new Map(predictionsData?.map(p => [p.gameId, p]) ?? [])
   const totalGames = gamesData?.length ?? 0
   const filledCount = predictionsData?.length ?? 0
@@ -641,6 +651,8 @@ export default function RankingPage() {
             ) : (
               <div className="card overflow-hidden" style={{ borderRadius: 16 }}>
                 {rankingData?.rankings.map((entry, index) => {
+                  if (entry.isHidden && !user?.isAdmin) return null
+
                   const { rankings } = rankingData
                   const isFirstInTieGroup = index === 0 || rankings[index - 1].position !== entry.position
                   const isLastOfTop3 = entry.position <= 3 && (index === rankings.length - 1 || rankings[index + 1].position > 3)
@@ -672,6 +684,7 @@ export default function RankingPage() {
                         borderBottom: isLastOfTop3
                           ? '2px solid rgb(var(--copa-border))'
                           : '1px solid rgb(var(--copa-border) / 0.6)',
+                        opacity: entry.isHidden ? 0.45 : 1,
                       }}
                       onClick={() => { if (canViewPredictions || user?.isAdmin) setSelectedEntry(entry) }}
                     >
@@ -702,8 +715,16 @@ export default function RankingPage() {
                           fontSize: isTop3 ? 15 : 14,
                           color: isMe ? 'rgb(var(--copa-gold))' : 'rgb(var(--copa-dark))',
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          display: 'flex', alignItems: 'center', gap: 4,
                         }}>
-                          {entry.name}{isMe ? ' (você)' : ''}
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                            {entry.name}{isMe ? ' (você)' : ''}
+                          </span>
+                          {entry.isHidden && user?.isAdmin && (
+                            <span className="shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(230,57,70,0.15)', color: '#e63946' }}>
+                              oculto
+                            </span>
+                          )}
                         </p>
                         {hasFilledPredictions ? (
                           <p className="text-xs text-slate-500 mt-0.5">
@@ -1346,6 +1367,20 @@ export default function RankingPage() {
                     <p className="text-2xl font-extrabold text-copa-dark">{selectedEntry.totalPoints}</p>
                     <p className="text-xs text-slate-600">pts</p>
                   </div>
+                  {user?.isAdmin && poolData && (
+                    <button
+                      onClick={() => toggleVisibilityMutation.mutate({ poolId: poolData.id, userId: selectedEntry.userId })}
+                      disabled={toggleVisibilityMutation.isPending}
+                      className="text-xs font-bold px-3 py-1.5 rounded-lg"
+                      style={{
+                        backgroundColor: selectedEntry.isHidden ? 'rgba(0,254,168,0.15)' : 'rgba(230,57,70,0.1)',
+                        color: selectedEntry.isHidden ? '#295A71' : '#e63946',
+                        opacity: toggleVisibilityMutation.isPending ? 0.5 : 1,
+                      }}
+                    >
+                      {selectedEntry.isHidden ? 'Reativar' : 'Ocultar'}
+                    </button>
+                  )}
                   <button onClick={() => setSelectedEntry(null)} className="text-slate-600 text-xl leading-none pb-1">✕</button>
                 </div>
               </div>
