@@ -15,7 +15,8 @@ api.interceptors.response.use(
   response => response,
   error => {
     const isAuthRoute = error.config?.url?.includes('/auth/')
-    if (error.response?.status === 401 && !isAuthRoute) {
+    const isAlreadyOnAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
+    if (error.response?.status === 401 && !isAuthRoute && !isAlreadyOnAuthPage) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       window.location.href = '/login'

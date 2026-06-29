@@ -17,6 +17,7 @@ export function useBrazilDay(): boolean {
       return (data.games ?? data) as Game[]
     },
     staleTime: 5 * 60 * 1000,
+    enabled: !!localStorage.getItem('token'),
   })
 
   const todayBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
