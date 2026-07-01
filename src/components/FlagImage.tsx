@@ -88,6 +88,7 @@ export default function FlagImage({ team, size = 40, className = '' }: FlagImage
       height={size}
       style={{ width: w, height: size, flexShrink: 0 }}
       className={`rounded-sm ${className}`}
+      draggable={false}
     />
   )
 }

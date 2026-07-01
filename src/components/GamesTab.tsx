@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, TouchEvent as ReactTouchEvent } from 'react'
 import { Game, Prediction } from '../types'
 import FlagImage, { TEAM_ABBR } from './FlagImage'
 
@@ -73,6 +73,14 @@ const QF_BRACKET = [
   { matchId: 99, r16Id1: 91, r16Id2: 92, sfId: 102 },
   { matchId: 100, r16Id1: 95, r16Id2: 96, sfId: 102 },
 ]
+
+// Metade do bracket que alimenta cada semifinal — usado pela visualização de
+// "Chaveamento". Ordem dos jogos importa: pares consecutivos devem corresponder
+// ao confronto real (ex: R32 74,77 → R16 89; R32 73,75 → R16 90; ambos → QF 97).
+const BRACKET_HALVES: Record<'left' | 'right', { r32: number[]; r16: number[]; qf: number[]; sf: number }> = {
+  left: { r32: [74, 77, 73, 75, 83, 84, 81, 82], r16: [89, 90, 93, 94], qf: [97, 98], sf: 101 },
+  right: { r32: [76, 78, 79, 80, 86, 88, 85, 87], r16: [91, 92, 95, 96], qf: [99, 100], sf: 102 },
+}
 
 // ─── Cálculo de classificação ─────────────────────────────────────────────────
 
@@ -165,17 +173,347 @@ function resolveSlot(
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-function TeamCell({ team, label }: { team: string | null; label: string }) {
+function TeamCell({ team, label, isWinner, starSide = 'right' }: { team: string | null; label: string; isWinner?: boolean; starSide?: 'left' | 'right' }) {
   if (!team) {
     return (
       <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>{label}</span>
     )
   }
+  const star = isWinner && <span style={{ color: '#00FEA8', fontSize: 8, lineHeight: 1 }}>★</span>
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>
+      {starSide === 'left' && star}
       <FlagImage team={team} size={14} />
       {TEAM_ABBR[team] ?? team}
+      {starSide === 'right' && star}
     </span>
+  )
+}
+
+// Mesma regra de desempate usada no backend (bracket.service.determineKnockoutWinner):
+// placar decide; empate no tempo normal só é resolvido se houver pênaltis diferentes.
+function knockoutWinner(
+  team1?: string | null, team2?: string | null,
+  score1?: number | null, score2?: number | null,
+  penalty1?: number | null, penalty2?: number | null,
+): string | null {
+  if (!team1 || !team2 || score1 == null || score2 == null) return null
+  if (score1 !== score2) return score1 > score2 ? team1 : team2
+  if (penalty1 == null || penalty2 == null || penalty1 === penalty2) return null
+  return penalty1 > penalty2 ? team1 : team2
+}
+
+// ─── Chaveamento (bracket visual) ──────────────────────────────────────────────
+
+interface BracketSlot {
+  team: string | null
+  label: string
+}
+
+interface BracketNodeData {
+  matchId: number
+  t1: BracketSlot
+  t2: BracketSlot
+  winner: string | null
+  score1: number | null
+  score2: number | null
+  penalty1: number | null
+  penalty2: number | null
+  matchDate: string | null
+}
+
+function resolveR32BracketNode(
+  matchId: number,
+  standings: Map<string, TeamStat[]>,
+  top8thirds: Set<string>,
+  knockoutGames: Map<number, Game>,
+): BracketNodeData {
+  const game = R32_BRACKET.find(g => g.matchId === matchId)!
+  const dbGame = knockoutGames.get(matchId)
+  const isRealTeam = (name?: string) => !!name && !name.startsWith('Venc.') && !/^\d/.test(name)
+  const t1 = isRealTeam(dbGame?.team1) ? { team: dbGame!.team1, label: dbGame!.team1 } : resolveSlot(game.slot1, standings, top8thirds)
+  const t2 = isRealTeam(dbGame?.team2) ? { team: dbGame!.team2, label: dbGame!.team2 } : resolveSlot(game.slot2, standings, top8thirds)
+  const winner = knockoutWinner(t1.team, t2.team, dbGame?.score1, dbGame?.score2, dbGame?.penalty1, dbGame?.penalty2)
+  return {
+    matchId, t1, t2, winner,
+    score1: dbGame?.score1 ?? null, score2: dbGame?.score2 ?? null,
+    penalty1: dbGame?.penalty1 ?? null, penalty2: dbGame?.penalty2 ?? null,
+    matchDate: dbGame?.matchDate ?? null,
+  }
+}
+
+function resolveKnockoutBracketNode(
+  matchId: number,
+  knockoutGames: Map<number, Game>,
+  fallback1: string,
+  fallback2: string,
+): BracketNodeData {
+  const dbGame = knockoutGames.get(matchId)
+  const isReal = (name?: string) => !!name && !name.startsWith('Venc.')
+  const t1: BracketSlot = isReal(dbGame?.team1) ? { team: dbGame!.team1, label: dbGame!.team1 } : { team: null, label: fallback1 }
+  const t2: BracketSlot = isReal(dbGame?.team2) ? { team: dbGame!.team2, label: dbGame!.team2 } : { team: null, label: fallback2 }
+  const winner = knockoutWinner(dbGame?.team1, dbGame?.team2, dbGame?.score1, dbGame?.score2, dbGame?.penalty1, dbGame?.penalty2)
+  return {
+    matchId, t1, t2, winner,
+    score1: dbGame?.score1 ?? null, score2: dbGame?.score2 ?? null,
+    penalty1: dbGame?.penalty1 ?? null, penalty2: dbGame?.penalty2 ?? null,
+    matchDate: dbGame?.matchDate ?? null,
+  }
+}
+
+// Centro vertical (em px) de cada partida por rodada, calculado a partir da contagem
+// de folhas (jogos de 16-avos) — cada rodada seguinte tem o centro na média dos dois
+// jogos que alimentam ela, o que alinha os conectores automaticamente sem medir o DOM.
+function computeBracketCenters(leafCount: number, rowHeight: number): number[][] {
+  let centers = Array.from({ length: leafCount }, (_, i) => (i + 0.5) * rowHeight)
+  const rounds = [centers]
+  while (centers.length > 1) {
+    const next: number[] = []
+    for (let i = 0; i < centers.length; i += 2) {
+      next.push((centers[i] + centers[i + 1]) / 2)
+    }
+    centers = next
+    rounds.push(centers)
+  }
+  return rounds
+}
+
+const BRACKET_ROW_HEIGHT = 52
+const BRACKET_NODE_HEIGHT = 40
+const BRACKET_COLUMN_WIDTH = 66
+const BRACKET_COLUMN_GAP = 20
+
+function BracketTeamLine({ slot, winner }: { slot: BracketSlot; winner: string | null }) {
+  const isLoser = winner != null && slot.team != null && slot.team !== winner
+  const isWinner = winner != null && slot.team === winner
+  if (!slot.team) {
+    return <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, lineHeight: 1 }}>{slot.label}</span>
+  }
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, color: isLoser ? '#94a3b8' : '#1a1a1a', lineHeight: 1 }}>
+      <span style={{ filter: isLoser ? 'grayscale(1)' : undefined, opacity: isLoser ? 0.55 : 1, display: 'flex', flexShrink: 0 }}>
+        <FlagImage team={slot.team} size={13} />
+      </span>
+      {TEAM_ABBR[slot.team] ?? slot.team}
+      {isWinner && <span style={{ color: '#00FEA8', fontSize: 7, lineHeight: 1 }}>★</span>}
+    </span>
+  )
+}
+
+function BracketMatchNode({ node, top, onClick }: { node: BracketNodeData; top: number; onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        position: 'absolute',
+        top,
+        left: 0,
+        width: BRACKET_COLUMN_WIDTH,
+        height: BRACKET_NODE_HEIGHT,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        backgroundColor: '#FFFDF5',
+        border: '1px solid #D9CBAD',
+        padding: '2px 4px',
+        boxSizing: 'border-box',
+        cursor: 'pointer',
+      }}
+    >
+      <BracketTeamLine slot={node.t1} winner={node.winner} />
+      <BracketTeamLine slot={node.t2} winner={node.winner} />
+    </div>
+  )
+}
+
+function BracketMatchModal({ node, onClose }: { node: BracketNodeData; onClose: () => void }) {
+  const hasResult = node.score1 != null && node.score2 != null
+  const hasPenalties = node.penalty1 != null && node.penalty2 != null
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ backgroundColor: '#F5EDD0', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: '20px 20px 40px' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8' }}>
+            J{node.matchId}{node.matchDate && ` · ${formatKnockoutDate(new Date(node.matchDate))}`}
+          </span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: '#64748b', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            {node.t1.team && <FlagImage team={node.t1.team} size={36} />}
+            <span style={{ fontSize: 13, fontWeight: 700, color: node.winner && node.t1.team && node.t1.team !== node.winner ? '#94a3b8' : '#1a1a1a', textAlign: 'center' }}>
+              {node.t1.team ? (TEAM_ABBR[node.t1.team] ?? node.t1.team) : node.t1.label}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 60 }}>
+            {hasResult ? (
+              <>
+                <span style={{ fontSize: 22, fontWeight: 800, color: '#295A71', fontVariantNumeric: 'tabular-nums' }}>
+                  {node.score1} × {node.score2}
+                </span>
+                {hasPenalties && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', marginTop: 2 }}>({node.penalty1}-{node.penalty2} pên.)</span>
+                )}
+              </>
+            ) : (
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#D9CBAD' }}>×</span>
+            )}
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            {node.t2.team && <FlagImage team={node.t2.team} size={36} />}
+            <span style={{ fontSize: 13, fontWeight: 700, color: node.winner && node.t2.team && node.t2.team !== node.winner ? '#94a3b8' : '#1a1a1a', textAlign: 'center' }}>
+              {node.t2.team ? (TEAM_ABBR[node.t2.team] ?? node.t2.team) : node.t2.label}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const BRACKET_TOTAL_ROUNDS = 4
+const BRACKET_TOTAL_WIDTH = BRACKET_TOTAL_ROUNDS * BRACKET_COLUMN_WIDTH + (BRACKET_TOTAL_ROUNDS - 1) * BRACKET_COLUMN_GAP
+const BRACKET_TOTAL_HEIGHT = 8 * BRACKET_ROW_HEIGHT
+
+// Conteúdo puro do bracket de uma metade (sem animação) — usado tanto para o slide
+// que está entrando quanto para o que está saindo durante a transição do carrossel.
+function BracketHalfContent({
+  side,
+  standings,
+  top8thirds,
+  knockoutGames,
+  onSelectMatch,
+}: {
+  side: 'left' | 'right'
+  standings: Map<string, TeamStat[]>
+  top8thirds: Set<string>
+  knockoutGames: Map<number, Game>
+  onSelectMatch: (node: BracketNodeData) => void
+}) {
+  const halves = BRACKET_HALVES[side]
+
+  const r32Nodes = halves.r32.map(id => resolveR32BracketNode(id, standings, top8thirds, knockoutGames))
+  const r16Nodes = halves.r16.map(id => {
+    const g = R16_BRACKET.find(r => r.matchId === id)!
+    return resolveKnockoutBracketNode(id, knockoutGames, `Venc. J${g.r32Id1}`, `Venc. J${g.r32Id2}`)
+  })
+  const qfNodes = halves.qf.map(id => {
+    const g = QF_BRACKET.find(q => q.matchId === id)!
+    return resolveKnockoutBracketNode(id, knockoutGames, `Venc. J${g.r16Id1}`, `Venc. J${g.r16Id2}`)
+  })
+  const sfNode = resolveKnockoutBracketNode(halves.sf, knockoutGames, `Venc. J${halves.qf[0]}`, `Venc. J${halves.qf[1]}`)
+
+  const rounds = [r32Nodes, r16Nodes, qfNodes, [sfNode]]
+  const centers = computeBracketCenters(8, BRACKET_ROW_HEIGHT)
+  // Lado direito é espelhado: 16-avos fica na ponta direita convergindo para a esquerda.
+  const colX = rounds.map((_, r) => {
+    const order = side === 'right' ? rounds.length - 1 - r : r
+    return order * (BRACKET_COLUMN_WIDTH + BRACKET_COLUMN_GAP)
+  })
+
+  const connectors: { key: string; d: string }[] = []
+  const dots: { key: string; cx: number; cy: number }[] = []
+  for (let r = 0; r < rounds.length - 1; r++) {
+    const roundCenters = centers[r]
+    const forward = colX[r + 1] > colX[r]
+    for (let k = 0; k < rounds[r + 1].length; k++) {
+      const y0 = roundCenters[k * 2]
+      const y1 = roundCenters[k * 2 + 1]
+      const yMid = centers[r + 1][k]
+      const xStart = forward ? colX[r] + BRACKET_COLUMN_WIDTH : colX[r]
+      const xEndCol = forward ? colX[r + 1] : colX[r + 1] + BRACKET_COLUMN_WIDTH
+      const xMid = (xStart + xEndCol) / 2
+      connectors.push({
+        key: `${r}-${k}`,
+        d: `M ${xStart} ${y0} L ${xMid} ${y0} L ${xMid} ${y1} M ${xStart} ${y1} L ${xMid} ${y1} M ${xMid} ${yMid} L ${xEndCol} ${yMid}`,
+      })
+      dots.push({ key: `${r}-${k}`, cx: xMid, cy: yMid })
+    }
+  }
+
+  return (
+    <div style={{ position: 'absolute', top: 0, left: 0, width: BRACKET_TOTAL_WIDTH, height: BRACKET_TOTAL_HEIGHT }}>
+      <svg width={BRACKET_TOTAL_WIDTH} height={BRACKET_TOTAL_HEIGHT} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
+        {connectors.map(c => (
+          <path key={c.key} d={c.d} stroke="#D9CBAD" strokeWidth={1.5} fill="none" />
+        ))}
+        {dots.map(dot => (
+          <circle key={dot.key} cx={dot.cx} cy={dot.cy} r={3.5} fill="#FFD100" />
+        ))}
+      </svg>
+      {rounds.map((roundNodes, r) => (
+        <div key={r} style={{ position: 'absolute', top: 0, left: colX[r], width: BRACKET_COLUMN_WIDTH, height: BRACKET_TOTAL_HEIGHT }}>
+          {roundNodes.map((node, i) => (
+            <BracketMatchNode key={node.matchId} node={node} top={centers[r][i] - BRACKET_NODE_HEIGHT / 2} onClick={() => onSelectMatch(node)} />
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Carrossel: enquanto a metade antiga desliza para fora, a nova entra do lado
+// oposto ao mesmo tempo — as duas ficam visíveis durante a transição.
+// Os dois lados ficam sempre montados lado a lado numa faixa larga; trocar de lado
+// só desliza essa faixa (como arrastar a tela), sem desmontar/remontar nada.
+// Mesmo padrão de swipe já usado na navegação de grupos em PredictionsPage: detecta
+// o gesto no touchend (sem seguir o dedo em tempo real) — mais simples e confiável
+// entre dispositivos do que rastrear a posição durante o arraste.
+function BracketCarousel(props: {
+  side: 'left' | 'right'
+  standings: Map<string, TeamStat[]>
+  top8thirds: Set<string>
+  knockoutGames: Map<number, Game>
+  onSelectMatch: (node: BracketNodeData) => void
+  onSideChange: (side: 'left' | 'right') => void
+}) {
+  const { side, onSideChange, ...rest } = props
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+
+  function handleTouchStart(e: ReactTouchEvent) {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+
+  function handleTouchEnd(e: ReactTouchEvent) {
+    const start = touchStartRef.current
+    touchStartRef.current = null
+    if (!start) return
+
+    const deltaX = e.changedTouches[0].clientX - start.x
+    const deltaY = e.changedTouches[0].clientY - start.y
+    if (Math.abs(deltaX) < 60 || Math.abs(deltaX) < Math.abs(deltaY)) return
+
+    if (deltaX < 0 && side === 'left') onSideChange('right')
+    if (deltaX > 0 && side === 'right') onSideChange('left')
+  }
+
+  return (
+    <div
+      style={{ position: 'relative', overflow: 'hidden', width: BRACKET_TOTAL_WIDTH, height: BRACKET_TOTAL_HEIGHT, margin: '8px auto 0', touchAction: 'pan-y' }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div style={{
+        display: 'flex',
+        width: BRACKET_TOTAL_WIDTH * 2,
+        transform: `translateX(${side === 'right' ? -BRACKET_TOTAL_WIDTH : 0}px)`,
+        transition: 'transform 0.35s ease',
+      }}>
+        <div style={{ position: 'relative', width: BRACKET_TOTAL_WIDTH, height: BRACKET_TOTAL_HEIGHT, flexShrink: 0 }}>
+          <BracketHalfContent {...rest} side="left" />
+        </div>
+        <div style={{ position: 'relative', width: BRACKET_TOTAL_WIDTH, height: BRACKET_TOTAL_HEIGHT, flexShrink: 0 }}>
+          <BracketHalfContent {...rest} side="right" />
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -307,9 +645,26 @@ function formatKnockoutDate(date: Date): string {
   return `${day} · ${hour}`
 }
 
-function ScoreBadge({ score1, score2 }: { score1: number | null | undefined; score2: number | null | undefined }) {
+function ScoreBadge({ score1, score2, penalty1, penalty2 }: {
+  score1: number | null | undefined
+  score2: number | null | undefined
+  penalty1?: number | null
+  penalty2?: number | null
+}) {
   if (score1 == null || score2 == null) {
     return <span style={{ fontSize: 11, fontWeight: 700, color: '#D9CBAD', paddingLeft: 6, paddingRight: 6 }}>×</span>
+  }
+  if (penalty1 != null && penalty2 != null) {
+    return (
+      <div style={{ position: 'relative', display: 'inline-block', paddingLeft: 4, paddingRight: 4 }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: '#295A71', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+          {score1} × {score2}
+        </span>
+        <span style={{ position: 'absolute', top: '100%', left: 0, right: 0, textAlign: 'center', fontSize: 9, fontWeight: 700, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+          ({penalty1}-{penalty2} pên.)
+        </span>
+      </div>
+    )
   }
   return (
     <span style={{ fontSize: 13, fontWeight: 800, color: '#295A71', fontVariantNumeric: 'tabular-nums', paddingLeft: 4, paddingRight: 4, whiteSpace: 'nowrap' }}>
@@ -327,6 +682,8 @@ function R32MatchCard({
   dbTeam2,
   score1,
   score2,
+  penalty1,
+  penalty2,
 }: {
   game: R32Game
   standings: Map<string, TeamStat[]>
@@ -336,10 +693,14 @@ function R32MatchCard({
   dbTeam2?: string
   score1?: number | null
   score2?: number | null
+  penalty1?: number | null
+  penalty2?: number | null
 }) {
   const isRealTeam = (name?: string) => !!name && !name.startsWith('Venc.') && !/^\d/.test(name)
   const t1 = isRealTeam(dbTeam1) ? { team: dbTeam1!, label: dbTeam1! } : resolveSlot(game.slot1, standings, top8thirds)
   const t2 = isRealTeam(dbTeam2) ? { team: dbTeam2!, label: dbTeam2! } : resolveSlot(game.slot2, standings, top8thirds)
+  const winner = knockoutWinner(t1.team, t2.team, score1, score2, penalty1, penalty2)
+  const hasPenalties = penalty1 != null && penalty2 != null
 
   return (
     <div style={{
@@ -347,6 +708,7 @@ function R32MatchCard({
       border: '1px solid #D9CBAD',
       borderRadius: 0,
       padding: '8px 10px',
+      paddingBottom: hasPenalties ? 18 : 8,
     }}>
       {matchDate && (
         <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
@@ -360,30 +722,34 @@ function R32MatchCard({
           </span>
         )}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-          <TeamCell team={t1.team} label={t1.label} />
+          <TeamCell team={t1.team} label={t1.label} isWinner={!!t1.team && t1.team === winner} starSide="left" />
         </div>
-        <ScoreBadge score1={score1} score2={score2} />
+        <ScoreBadge score1={score1} score2={score2} penalty1={penalty1} penalty2={penalty2} />
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
-          <TeamCell team={t2.team} label={t2.label} />
+          <TeamCell team={t2.team} label={t2.label} isWinner={!!t2.team && t2.team === winner} />
         </div>
       </div>
     </div>
   )
 }
 
-function R16MatchCard({ game, team1, team2, matchDate, score1, score2 }: {
+function R16MatchCard({ game, team1, team2, matchDate, score1, score2, penalty1, penalty2 }: {
   game: R16Game
   team1?: string
   team2?: string
   matchDate?: Date
   score1?: number | null
   score2?: number | null
+  penalty1?: number | null
+  penalty2?: number | null
 }) {
   const t1Real = team1 && !team1.startsWith('Venc.')
   const t2Real = team2 && !team2.startsWith('Venc.')
+  const winner = knockoutWinner(team1, team2, score1, score2, penalty1, penalty2)
+  const hasPenalties = penalty1 != null && penalty2 != null
 
   return (
-    <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, padding: '8px 10px' }}>
+    <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', borderRadius: 0, padding: '8px 10px', paddingBottom: hasPenalties ? 18 : 8 }}>
       {matchDate && (
         <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
           J{game.matchId} · {formatKnockoutDate(matchDate)}
@@ -393,14 +759,14 @@ function R16MatchCard({ game, team1, team2, matchDate, score1, score2 }: {
         {!matchDate && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J{game.matchId}</span>}
         <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
           {t1Real
-            ? <TeamCell team={team1!} label={team1!} />
+            ? <TeamCell team={team1!} label={team1!} isWinner={team1 === winner} starSide="left" />
             : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{game.r32Id1}</span>
           }
         </div>
-        <ScoreBadge score1={score1} score2={score2} />
+        <ScoreBadge score1={score1} score2={score2} penalty1={penalty1} penalty2={penalty2} />
         <div style={{ flex: 1 }}>
           {t2Real
-            ? <TeamCell team={team2!} label={team2!} />
+            ? <TeamCell team={team2!} label={team2!} isWinner={team2 === winner} />
             : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{game.r32Id2}</span>
           }
         </div>
@@ -443,12 +809,15 @@ interface GamesTabProps {
   gamesData: Game[]
   isAdmin?: boolean
   myPredictions: Map<string, Prediction>
-  onSaveResult: (gameNumber: number, score1: number, score2: number) => Promise<void>
+  onSaveResult: (gameNumber: number, score1: number, score2: number, penalty1?: number, penalty2?: number) => Promise<void>
 }
 
 export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResult }: GamesTabProps) {
   const [groupsExpanded, setGroupsExpanded] = useState(false)
   const [thirdsExpanded, setThirdsExpanded] = useState(false)
+  const [bracketExpanded, setBracketExpanded] = useState(false)
+  const [bracketSide, setBracketSide] = useState<'left' | 'right'>('left')
+  const [selectedBracketMatch, setSelectedBracketMatch] = useState<BracketNodeData | null>(null)
   const [r32Expanded, setR32Expanded] = useState(false)
   const [r16Expanded, setR16Expanded] = useState(false)
   const [qfExpanded, setQfExpanded] = useState(false)
@@ -461,6 +830,8 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
   const [adminEditing, setAdminEditing] = useState<number | null>(null)
   const [editScore1, setEditScore1] = useState('')
   const [editScore2, setEditScore2] = useState('')
+  const [editPenalty1, setEditPenalty1] = useState('')
+  const [editPenalty2, setEditPenalty2] = useState('')
   const [saving, setSaving] = useState(false)
 
   const standings = useMemo(() => computeGroupStandings(gamesData), [gamesData])
@@ -500,6 +871,7 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
     const hasKnockout = gamesData.some(g => g.number >= 73)
     setGroupsExpanded(!hasKnockout)
     setThirdsExpanded(!hasKnockout)
+    setBracketExpanded(true)
     setR32Expanded(activePhase === 'R32')
     setR16Expanded(activePhase === 'R16')
     setQfExpanded(activePhase === 'QF')
@@ -511,11 +883,17 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
   const finishedGames = gamesData.filter(g => g.score1 !== null)
   const upcomingGames = gamesData.filter(g => g.score1 === null)
 
+  const isKnockoutTie = (gameNumber: number) =>
+    gameNumber >= 73 && editScore1 !== '' && editScore2 !== '' && Number(editScore1) === Number(editScore2)
+
   async function handleAdminSave(gameNumber: number) {
     if (editScore1 === '' || editScore2 === '') return
+    if (isKnockoutTie(gameNumber) && (editPenalty1 === '' || editPenalty2 === '' || editPenalty1 === editPenalty2)) return
     setSaving(true)
     try {
-      await onSaveResult(gameNumber, Number(editScore1), Number(editScore2))
+      const penalty1 = isKnockoutTie(gameNumber) ? Number(editPenalty1) : undefined
+      const penalty2 = isKnockoutTie(gameNumber) ? Number(editPenalty2) : undefined
+      await onSaveResult(gameNumber, Number(editScore1), Number(editScore2), penalty1, penalty2)
       setAdminEditing(null)
     } finally {
       setSaving(false)
@@ -560,6 +938,10 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
 
       {selectedGroup && (
         <GroupGamesModal group={selectedGroup} games={gamesData} onClose={() => setSelectedGroup(null)} />
+      )}
+
+      {selectedBracketMatch && (
+        <BracketMatchModal node={selectedBracketMatch} onClose={() => setSelectedBracketMatch(null)} />
       )}
 
       {/* ── Ranking dos 3ºs colocados ── */}
@@ -618,6 +1000,38 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
         </div>}
       </div>
 
+      {/* ── Chaveamento ── */}
+      <div style={{ borderTop: '1px solid #D9CBAD', paddingTop: 0 }}>
+        <SectionHeader
+          label="Chaveamento"
+          expanded={bracketExpanded}
+          onToggle={() => setBracketExpanded(v => !v)}
+        />
+        {bracketExpanded && (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 0, marginBottom: 4 }}>
+              {(['left', 'right'] as const).map(side => (
+                <button
+                  key={side}
+                  onClick={() => setBracketSide(side)}
+                  style={{
+                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
+                    padding: '5px 14px', border: '1px solid #295A71', cursor: 'pointer',
+                    backgroundColor: bracketSide === side ? '#295A71' : 'transparent',
+                    color: bracketSide === side ? '#FFFDF5' : '#295A71',
+                  }}
+                >
+                  {side === 'left' ? 'Esquerda' : 'Direita'}
+                </button>
+              ))}
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <BracketCarousel side={bracketSide} standings={standings} top8thirds={top8thirds} knockoutGames={knockoutGames} onSelectMatch={setSelectedBracketMatch} onSideChange={setBracketSide} />
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* ── 16 Avos de Final ── */}
       <div style={{ borderTop: '1px solid #D9CBAD', paddingTop: 0 }}>
         <SectionHeader
@@ -645,6 +1059,8 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                 dbTeam2={knockoutGames.get(game.matchId)?.team2}
                 score1={knockoutGames.get(game.matchId)?.score1}
                 score2={knockoutGames.get(game.matchId)?.score2}
+                penalty1={knockoutGames.get(game.matchId)?.penalty1}
+                penalty2={knockoutGames.get(game.matchId)?.penalty2}
               />
             ))}
           </div>
@@ -678,6 +1094,8 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                   matchDate={dbGame ? new Date(dbGame.matchDate) : undefined}
                   score1={dbGame?.score1}
                   score2={dbGame?.score2}
+                  penalty1={dbGame?.penalty1}
+                  penalty2={dbGame?.penalty2}
                 />
               )
             })}
@@ -695,17 +1113,19 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
               const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
               const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Venc.')
               const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Venc.')
+              const winner = knockoutWinner(dbGame?.team1, dbGame?.team2, dbGame?.score1, dbGame?.score2, dbGame?.penalty1, dbGame?.penalty2)
+              const hasPenalties = dbGame?.penalty1 != null && dbGame?.penalty2 != null
               return (
-                <div key={q.matchId} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px' }}>
+                <div key={q.matchId} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px', paddingBottom: hasPenalties ? 18 : 8 }}>
                   {matchDate && <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>J{q.matchId} · {formatKnockoutDate(matchDate)}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {!matchDate && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J{q.matchId}</span>}
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{q.r16Id1}</span>}
+                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} isWinner={dbGame!.team1 === winner} starSide="left" /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{q.r16Id1}</span>}
                     </div>
-                    <ScoreBadge score1={dbGame?.score1} score2={dbGame?.score2} />
+                    <ScoreBadge score1={dbGame?.score1} score2={dbGame?.score2} penalty1={dbGame?.penalty1} penalty2={dbGame?.penalty2} />
                     <div style={{ flex: 1 }}>
-                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{q.r16Id2}</span>}
+                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} isWinner={dbGame!.team2 === winner} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{q.r16Id2}</span>}
                     </div>
                   </div>
                 </div>
@@ -725,17 +1145,19 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
               const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
               const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Venc.')
               const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Venc.')
+              const winner = knockoutWinner(dbGame?.team1, dbGame?.team2, dbGame?.score1, dbGame?.score2, dbGame?.penalty1, dbGame?.penalty2)
+              const hasPenalties = dbGame?.penalty1 != null && dbGame?.penalty2 != null
               return (
-                <div key={s.matchId} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px' }}>
+                <div key={s.matchId} style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px', paddingBottom: hasPenalties ? 18 : 8 }}>
                   {matchDate && <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>J{s.matchId} · {formatKnockoutDate(matchDate)}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {!matchDate && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J{s.matchId}</span>}
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{s.q1}</span>}
+                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} isWinner={dbGame!.team1 === winner} starSide="left" /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{s.q1}</span>}
                     </div>
-                    <ScoreBadge score1={dbGame?.score1} score2={dbGame?.score2} />
+                    <ScoreBadge score1={dbGame?.score1} score2={dbGame?.score2} penalty1={dbGame?.penalty1} penalty2={dbGame?.penalty2} />
                     <div style={{ flex: 1 }}>
-                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{s.q2}</span>}
+                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} isWinner={dbGame!.team2 === winner} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Venc. J{s.q2}</span>}
                     </div>
                   </div>
                 </div>
@@ -751,21 +1173,23 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
         const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
         const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Perd.')
         const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Perd.')
+        const winner = knockoutWinner(dbGame?.team1, dbGame?.team2, dbGame?.score1, dbGame?.score2, dbGame?.penalty1, dbGame?.penalty2)
+        const hasPenalties = dbGame?.penalty1 != null && dbGame?.penalty2 != null
         return (
           <div style={{ borderTop: '1px solid #D9CBAD', paddingTop: 0 }}>
             <SectionHeader label="3º Lugar" count={1} expanded={tpExpanded} onToggle={() => setTpExpanded(v => !v)} />
             {tpExpanded && (
               <div style={{ marginBottom: 8 }}>
-                <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px' }}>
+                <div style={{ backgroundColor: '#FFFDF5', border: '1px solid #D9CBAD', padding: '8px 10px', paddingBottom: hasPenalties ? 18 : 8 }}>
                   {matchDate && <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>J103 · {formatKnockoutDate(matchDate)}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {!matchDate && <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 20 }}>J103</span>}
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Perd. J101</span>}
+                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} isWinner={dbGame!.team1 === winner} starSide="left" /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Perd. J101</span>}
                     </div>
-                    <ScoreBadge score1={dbGame?.score1} score2={dbGame?.score2} />
+                    <ScoreBadge score1={dbGame?.score1} score2={dbGame?.score2} penalty1={dbGame?.penalty1} penalty2={dbGame?.penalty2} />
                     <div style={{ flex: 1 }}>
-                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Perd. J102</span>}
+                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} isWinner={dbGame!.team2 === winner} /> : <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Perd. J102</span>}
                     </div>
                   </div>
                 </div>
@@ -781,24 +1205,35 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
         const matchDate = dbGame ? new Date(dbGame.matchDate) : undefined
         const t1Real = dbGame?.team1 && !dbGame.team1.startsWith('Venc.')
         const t2Real = dbGame?.team2 && !dbGame.team2.startsWith('Venc.')
+        const winner = knockoutWinner(dbGame?.team1, dbGame?.team2, dbGame?.score1, dbGame?.score2, dbGame?.penalty1, dbGame?.penalty2)
+        const hasPenalties = dbGame?.penalty1 != null && dbGame?.penalty2 != null
         return (
           <div style={{ borderTop: '1px solid #D9CBAD', paddingTop: 0 }}>
             <SectionHeader label="Final" count={1} expanded={finExpanded} onToggle={() => setFinExpanded(v => !v)} />
             {finExpanded && (
               <div style={{ marginBottom: 8 }}>
-                <div style={{ backgroundColor: '#FFFDF5', border: '2px solid #FFD100', padding: '10px 10px' }}>
+                <div style={{ backgroundColor: '#FFFDF5', border: '2px solid #FFD100', padding: '10px 10px', paddingBottom: hasPenalties ? 20 : 10 }}>
                   {matchDate && <div style={{ fontSize: 9, fontWeight: 800, color: '#B8960A', marginBottom: 4 }}>J104 · FINAL · {formatKnockoutDate(matchDate)}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {!matchDate && <span style={{ fontSize: 9, fontWeight: 800, color: '#B8960A', minWidth: 20 }}>J104</span>}
                     <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} /> : <span style={{ fontSize: 12, color: '#1a1a1a', fontWeight: 700 }}>Venc. J101</span>}
+                      {t1Real ? <TeamCell team={dbGame!.team1} label={dbGame!.team1} isWinner={dbGame!.team1 === winner} starSide="left" /> : <span style={{ fontSize: 12, color: '#1a1a1a', fontWeight: 700 }}>Venc. J101</span>}
                     </div>
                     {dbGame?.score1 != null
-                      ? <span style={{ fontSize: 14, fontWeight: 800, color: '#B8960A', fontVariantNumeric: 'tabular-nums', paddingLeft: 4, paddingRight: 4, whiteSpace: 'nowrap' }}>{dbGame.score1} × {dbGame.score2}</span>
+                      ? <div style={{ position: 'relative', display: 'inline-block', paddingLeft: 4, paddingRight: 4 }}>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: '#B8960A', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                            {dbGame.score1} × {dbGame.score2}
+                          </span>
+                          {dbGame.penalty1 != null && dbGame.penalty2 != null && (
+                            <span style={{ position: 'absolute', top: '100%', left: 0, right: 0, textAlign: 'center', fontSize: 9, fontWeight: 700, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                              ({dbGame.penalty1}-{dbGame.penalty2} pên.)
+                            </span>
+                          )}
+                        </div>
                       : <span style={{ fontSize: 13, fontWeight: 800, color: '#FFD100', paddingLeft: 6, paddingRight: 6 }}>×</span>
                     }
                     <div style={{ flex: 1 }}>
-                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} /> : <span style={{ fontSize: 12, color: '#1a1a1a', fontWeight: 700 }}>Venc. J102</span>}
+                      {t2Real ? <TeamCell team={dbGame!.team2} label={dbGame!.team2} isWinner={dbGame!.team2 === winner} /> : <span style={{ fontSize: 12, color: '#1a1a1a', fontWeight: 700 }}>Venc. J102</span>}
                     </div>
                   </div>
                 </div>
@@ -832,6 +1267,9 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                           <span style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>{TEAM_ABBR[game.team1] ?? game.team1}</span>
                           <span style={{ fontSize: 13, fontWeight: 800, color: game.score1 !== null ? '#295A71' : '#D9CBAD' }}>
                             {game.score1 !== null ? `${game.score1}×${game.score2}` : '-'}
+                            {game.penalty1 != null && game.penalty2 != null && (
+                              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600 }}> ({game.penalty1}-{game.penalty2} pên.)</span>
+                            )}
                           </span>
                           <span style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>{TEAM_ABBR[game.team2] ?? game.team2}</span>
                         </div>
@@ -841,6 +1279,8 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                               setAdminEditing(game.number)
                               setEditScore1(game.score1 !== null ? String(game.score1) : '')
                               setEditScore2(game.score2 !== null ? String(game.score2) : '')
+                              setEditPenalty1(game.penalty1 !== null ? String(game.penalty1) : '')
+                              setEditPenalty2(game.penalty2 !== null ? String(game.penalty2) : '')
                             }}
                             style={{ fontSize: 10, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                           >
@@ -854,35 +1294,57 @@ export default function GamesTab({ gamesData, isAdmin, myPredictions, onSaveResu
                         </div>
                       )}
                       {isEditing && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px solid #F0E8D5' }}>
-                          <input
-                            type="number" min="0"
-                            value={editScore1}
-                            onChange={e => setEditScore1(e.target.value)}
-                            className="score-input"
-                            style={{ width: 44, height: 36, textAlign: 'center', fontSize: 16, fontWeight: 700, borderRadius: 8 }}
-                          />
-                          <span style={{ fontWeight: 700, color: '#64748b' }}>×</span>
-                          <input
-                            type="number" min="0"
-                            value={editScore2}
-                            onChange={e => setEditScore2(e.target.value)}
-                            className="score-input"
-                            style={{ width: 44, height: 36, textAlign: 'center', fontSize: 16, fontWeight: 700, borderRadius: 8 }}
-                          />
-                          <button
-                            onClick={() => handleAdminSave(game.number)}
-                            disabled={saving || editScore1 === '' || editScore2 === ''}
-                            style={{ backgroundColor: '#FFD100', color: '#1a1a1a', border: 'none', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}
-                          >
-                            {saving ? '...' : 'Salvar'}
-                          </button>
-                          <button
-                            onClick={() => { setAdminEditing(null) }}
-                            style={{ fontSize: 11, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}
-                          >
-                            Cancelar
-                          </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px solid #F0E8D5' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                            <input
+                              type="number" min="0"
+                              value={editScore1}
+                              onChange={e => setEditScore1(e.target.value)}
+                              className="score-input"
+                              style={{ width: 44, height: 36, textAlign: 'center', fontSize: 16, fontWeight: 700, borderRadius: 8 }}
+                            />
+                            <span style={{ fontWeight: 700, color: '#64748b' }}>×</span>
+                            <input
+                              type="number" min="0"
+                              value={editScore2}
+                              onChange={e => setEditScore2(e.target.value)}
+                              className="score-input"
+                              style={{ width: 44, height: 36, textAlign: 'center', fontSize: 16, fontWeight: 700, borderRadius: 8 }}
+                            />
+                            <button
+                              onClick={() => handleAdminSave(game.number)}
+                              disabled={saving || editScore1 === '' || editScore2 === '' || (isKnockoutTie(game.number) && (editPenalty1 === '' || editPenalty2 === '' || editPenalty1 === editPenalty2))}
+                              style={{ backgroundColor: '#FFD100', color: '#1a1a1a', border: 'none', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}
+                            >
+                              {saving ? '...' : 'Salvar'}
+                            </button>
+                            <button
+                              onClick={() => { setAdminEditing(null) }}
+                              style={{ fontSize: 11, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                          {isKnockoutTie(game.number) && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                              <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>Pênaltis:</span>
+                              <input
+                                type="number" min="0"
+                                value={editPenalty1}
+                                onChange={e => setEditPenalty1(e.target.value)}
+                                className="score-input"
+                                style={{ width: 36, height: 28, textAlign: 'center', fontSize: 13, fontWeight: 700, borderRadius: 8 }}
+                              />
+                              <span style={{ fontWeight: 700, color: '#64748b' }}>×</span>
+                              <input
+                                type="number" min="0"
+                                value={editPenalty2}
+                                onChange={e => setEditPenalty2(e.target.value)}
+                                className="score-input"
+                                style={{ width: 36, height: 28, textAlign: 'center', fontSize: 13, fontWeight: 700, borderRadius: 8 }}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

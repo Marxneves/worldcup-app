@@ -247,8 +247,8 @@ export default function RankingPage() {
     }
   }
 
-  async function handleSaveResult(gameNumber: number, score1: number, score2: number) {
-    await api.post('/admin/results', { gameNumber, score1, score2 })
+  async function handleSaveResult(gameNumber: number, score1: number, score2: number, penalty1?: number, penalty2?: number) {
+    await api.post('/admin/results', { gameNumber, score1, score2, penalty1, penalty2 })
     await queryClient.invalidateQueries({ queryKey: ['games'] })
     await queryClient.invalidateQueries({ queryKey: ['ranking', poolCode] })
     await queryClient.invalidateQueries({ queryKey: ['predictions', poolCode] })
