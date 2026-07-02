@@ -43,6 +43,10 @@ export default function AdminPage() {
   const [oddsFeedback, setOddsFeedback] = useState('')
   const [oddsError, setOddsError] = useState('')
 
+  const [syncingBracket, setSyncingBracket] = useState(false)
+  const [bracketFeedback, setBracketFeedback] = useState('')
+  const [bracketError, setBracketError] = useState('')
+
   const [managingPoolId, setManagingPoolId] = useState<string | null>(null)
 
   const { data: featureFlags } = useQuery({
@@ -132,6 +136,23 @@ export default function AdminPage() {
       setOddsError(msg || 'Erro ao sincronizar odds')
     } finally {
       setSyncingOdds(false)
+    }
+  }
+
+  async function handleSyncBracket() {
+    setSyncingBracket(true)
+    setBracketFeedback('')
+    setBracketError('')
+    try {
+      const { data } = await api.post('/admin/sync-bracket')
+      setBracketFeedback(data.message)
+      await queryClient.invalidateQueries({ queryKey: ['games'] })
+      refetch()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setBracketError(msg || 'Erro ao atualizar chaveamento')
+    } finally {
+      setSyncingBracket(false)
     }
   }
 
@@ -271,6 +292,29 @@ export default function AdminPage() {
             {espnError && (
               <motion.p className="text-copa-red text-sm font-semibold mt-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 {espnError}
+              </motion.p>
+            )}
+          </div>
+
+          {/* Atualizar chaveamento */}
+          <div className="card p-5">
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#295A71', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+              Atualizar chaveamento
+            </p>
+            <p className="text-slate-600 text-sm mb-4">
+              Resolve os times avançados do mata-mata (16-avos, oitavas, ...) a partir dos resultados já salvos.
+            </p>
+            <button className="btn-secondary" onClick={handleSyncBracket} disabled={syncingBracket}>
+              {syncingBracket ? 'Atualizando...' : 'Atualizar chaveamento'}
+            </button>
+            {bracketFeedback && (
+              <motion.p className="text-copa-menta text-sm font-semibold mt-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                {bracketFeedback}
+              </motion.p>
+            )}
+            {bracketError && (
+              <motion.p className="text-copa-red text-sm font-semibold mt-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                {bracketError}
               </motion.p>
             )}
           </div>
