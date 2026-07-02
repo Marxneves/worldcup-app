@@ -30,6 +30,11 @@ function emptyStats(team: string): TeamStats {
   return { team, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, points: 0 }
 }
 
+function isMatchupDefined(game: Game): boolean {
+  return !game.team1.startsWith('Venc.') && !game.team1.startsWith('Perd.')
+    && !game.team2.startsWith('Venc.') && !game.team2.startsWith('Perd.')
+}
+
 function applyGameResult(
   home: TeamStats,
   away: TeamStats,
@@ -372,7 +377,7 @@ export default function PredictionsPage() {
       .sort((a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime()),
     [games]
   )
-  const showR16Session = r16Games.length > 0 && r32Games.length === 16 && r32Games.every(g => g.score1 !== null)
+  const showR16Session = r16Games.some(g => isMatchupDefined(g))
 
   const autoSessionRef = useRef(false)
   useEffect(() => {
@@ -901,7 +906,8 @@ export default function PredictionsPage() {
               })
               const isPredictionLocked = lockedPredictions.get(game.id)?.isLocked ?? false
               const isGameStarted = startedGames.has(game.id)
-              const isDisabled = isPredictionLocked || isGameStarted
+              const matchupDefined = isMatchupDefined(game)
+              const isDisabled = isPredictionLocked || isGameStarted || !matchupDefined
 
               return (
                 <div key={game.id}>
@@ -988,9 +994,11 @@ export default function PredictionsPage() {
                         </div>
                       </div>
                       <p className="text-xs text-center mt-2">
-                        {isGameStarted
-                          ? <span className="text-copa-red font-semibold">Jogo iniciado — sem pontuação</span>
-                          : <span className="text-slate-600">{dateStr}</span>
+                        {!matchupDefined
+                          ? <span className="text-slate-500 italic">Confronto ainda não definido</span>
+                          : isGameStarted
+                            ? <span className="text-copa-red font-semibold">Jogo iniciado — sem pontuação</span>
+                            : <span className="text-slate-600">{dateStr}</span>
                         }
                       </p>
                     </div>
@@ -999,6 +1007,12 @@ export default function PredictionsPage() {
               )
             })}
           </div>
+
+          {!r16Games.every(g => isMatchupDefined(g)) && (
+            <p className="text-xs text-slate-500 text-center px-2">
+              Você já pode preencher os confrontos definidos. A confirmação só é liberada quando todos os confrontos das oitavas saírem.
+            </p>
+          )}
 
           {allFilled && !isAllLocked && openGames.length > 0 && (
             <div className="mt-2 space-y-2">
